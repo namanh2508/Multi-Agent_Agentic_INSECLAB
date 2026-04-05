@@ -1,0 +1,17 @@
+set up google account:
+gcloud beta billing projects link 531723081379 \
+  --billing-account=01572F-292B46-4B705A
+
+
+run test  researcher: 
+uv run adk run agents/researcher
+
+run test judge: 
+uv run adk run agents/judge
+
+Researcher: https://researcher-yodc4wjz3q-uc.a.run.app
+Judge: https://judge-yodc4wjz3q-uc.a.run.app
+Content Builder: https://content-builder-yodc4wjz3q-uc.a.run.app
+Orchestrator: https://orchestrator-yodc4wjz3q-uc.a.run.app
+
+Final on cloud: https://course-creator-531723081379.us-central1.run.app
