@@ -1,0 +1,11 @@
+*.md
+logs/
+__pycache__/
+*.pyc
+*.pyo
+*.so
+*.egg-info/
+.env
+.env.local
+.venv/
+venv/
