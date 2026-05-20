@@ -9,6 +9,7 @@ from core.models import AgentTrace, EvalConfig
 from core.exceptions import EvaluationError
 from generator import AttackGenerator, AttackScheduler, ParaphraseMutator
 from oracle import VulnerabilityJudge, PolicyLoader
+from rl import QLearningConfig, QLearningSurfaceSelector
 from .aggregator import FindingAggregator
 from .reporter import ReportGenerator
 
@@ -36,6 +37,7 @@ class EvalRunner:
         self._baseline_trace: AgentTrace | None = None
         self._log_dir = Path("logs")
         self._log_dir.mkdir(exist_ok=True)
+        self._seen_finding_signatures: set[tuple[str, str]] = set()
 
     def set_judge(self, judge: VulnerabilityJudge) -> None:
         """Set the vulnerability judge."""
@@ -75,6 +77,7 @@ class EvalRunner:
             )
             cases.extend(variants)
         self.scheduler.enqueue(cases)
+        rl_selector = self._build_rl_selector()
 
         logger.info(f"Generated {len(cases)} attack cases")
 
@@ -82,7 +85,13 @@ class EvalRunner:
         executed = 0
 
         while not self.scheduler.is_empty() and executed < max_attacks:
-            case = self.scheduler.next()
+            selected_action = None
+            if rl_selector:
+                available_actions = self.scheduler.get_available_action_keys()
+                selected_action = rl_selector.select_action(available_actions)
+                case = self.scheduler.next_for_action(selected_action)
+            else:
+                case = self.scheduler.next()
             if not case:
                 break
 
@@ -107,6 +116,7 @@ class EvalRunner:
                         attack_case_id=case.id,
                     )
 
+                    reward = self._calculate_rl_reward(finding)
                     if finding:
                         findings.append(finding)
                         self.scheduler.update_feedback(case.id, AttackState.SUCCESS)
@@ -114,11 +124,26 @@ class EvalRunner:
                     else:
                         self.scheduler.update_feedback(case.id, AttackState.FAILED)
 
+                    if rl_selector and selected_action:
+                        rl_selector.update(
+                            action=selected_action,
+                            reward=reward,
+                            outcome="success" if finding else "failed",
+                            next_available_actions=self.scheduler.get_available_action_keys(),
+                        )
+
                 executed += 1
 
             except Exception as e:
                 logger.error(f"Attack {case.id} failed: {e}")
                 self.scheduler.update_feedback(case.id, AttackState.FAILED, str(e))
+                if rl_selector and selected_action:
+                    rl_selector.update(
+                        action=selected_action,
+                        reward=self._rl_error_reward(),
+                        outcome="error",
+                        next_available_actions=self.scheduler.get_available_action_keys(),
+                    )
 
         logger.info(f"Evaluation complete. Found {len(findings)} vulnerabilities.")
 
@@ -139,6 +164,9 @@ class EvalRunner:
                 "target_profile": self.config.adapter_config.config.get("profile", "unknown"),
                 "model": self.config.adapter_config.config.get("model", "unknown"),
                 "judge_provider": getattr(self.judge, "_provider", "unknown"),
+                "rl_surface_selection": (
+                    rl_selector.get_stats() if rl_selector else {"algorithm": "fifo"}
+                ),
             },
         )
 
@@ -156,6 +184,41 @@ class EvalRunner:
         self._baseline_trace = self.adapter.get_trace()
 
         logger.info("Baseline trace generated")
+
+    def _build_rl_selector(self) -> QLearningSurfaceSelector | None:
+        rl_algorithm = self.config.adapter_config.config.get("rl_surface_selection")
+        if rl_algorithm not in {"q-learning", "q_learning"}:
+            return None
+
+        return QLearningSurfaceSelector(QLearningConfig(
+            alpha=float(self.config.adapter_config.config.get("rl_alpha", 0.3)),
+            gamma=float(self.config.adapter_config.config.get("rl_gamma", 0.8)),
+            epsilon=float(self.config.adapter_config.config.get("rl_epsilon", 0.2)),
+            initial_q=float(self.config.adapter_config.config.get("rl_initial_q", 0.0)),
+            seed=int(self.config.adapter_config.config.get("rl_seed", 7)),
+        ))
+
+    def _calculate_rl_reward(self, finding: Any | None) -> float:
+        cost_penalty = float(self.config.adapter_config.config.get("rl_cost_penalty", 0.1))
+        no_finding_reward = float(self.config.adapter_config.config.get("rl_no_finding_reward", -0.2))
+        novelty_bonus = float(self.config.adapter_config.config.get("rl_novelty_bonus", 2.0))
+        duplicate_penalty = float(self.config.adapter_config.config.get("rl_duplicate_penalty", 1.0))
+
+        if not finding:
+            return no_finding_reward - cost_penalty
+
+        reward = float(finding.severity.score) + float(finding.confidence) - cost_penalty
+        signature = (finding.category.value, finding.explanation)
+        if signature in self._seen_finding_signatures:
+            reward -= duplicate_penalty
+        else:
+            self._seen_finding_signatures.add(signature)
+            reward += novelty_bonus
+        return reward
+
+    def _rl_error_reward(self) -> float:
+        cost_penalty = float(self.config.adapter_config.config.get("rl_cost_penalty", 0.1))
+        return -1.0 - cost_penalty
 
     def _log_trace(self, index: int, trace: AgentTrace) -> None:
         """Log a trace to file for debugging."""

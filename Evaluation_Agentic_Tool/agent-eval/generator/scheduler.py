@@ -57,6 +57,29 @@ class AttackScheduler:
 
         return self._queue.popleft()
 
+    def next_for_action(self, action_key: str) -> AttackCase | None:
+        """Get the next case matching category:surface action key."""
+        for case in list(self._queue):
+            if self.action_key(case) == action_key:
+                self._queue.remove(case)
+                return case
+        return self.next()
+
+    def get_available_action_keys(self) -> list[str]:
+        """Return available category:surface action keys in queue order."""
+        seen = set()
+        actions = []
+        for case in self._queue:
+            action = self.action_key(case)
+            if action not in seen:
+                seen.add(action)
+                actions.append(action)
+        return actions
+
+    @staticmethod
+    def action_key(case: AttackCase) -> str:
+        return f"{case.category.value}:{case.surface.value}"
+
     def peek(self) -> AttackCase | None:
         """Preview the next attack case without removing it."""
         if not self._queue:

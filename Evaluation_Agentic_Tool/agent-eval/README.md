@@ -177,6 +177,12 @@ Nếu muốn bật mutation/paraphrase để sinh thêm biến thể attack:
 python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --enable-mutation --n-variants 3 --max-attacks 20 --output reports\daa_security_mutation_report.html
 ```
 
+Nếu muốn dùng Q-learning để quyết định chọn attack surface endpoint:
+
+```powershell
+python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --rl-surface-selection q-learning --rl-alpha 0.3 --rl-gamma 0.8 --rl-epsilon 0.2 --max-attacks 30 --output reports\daa_security_q_learning_report.html
+```
+
 Giải thích tham số:
 
 | Tham số | Ý nghĩa |
@@ -187,6 +193,15 @@ Giải thích tham số:
 | `--judge-provider rule` | Dùng judge offline, không cần API |
 | `--max-attacks 20` | Số attack case tối đa |
 | `--output ...html` | File report kết quả |
+| `--rl-surface-selection q-learning` | Bật Q-learning selector thay cho FIFO surface scheduling |
+| `--rl-alpha` | Learning rate, mặc định `0.3` |
+| `--rl-gamma` | Discount factor, mặc định `0.8` |
+| `--rl-epsilon` | Epsilon-greedy exploration rate, mặc định `0.2` |
+| `--rl-initial-q` | Giá trị Q ban đầu, mặc định `0.0` |
+| `--rl-cost-penalty` | Phạt chi phí mỗi attack, mặc định `0.1` |
+| `--rl-no-finding-reward` | Reward khi không có finding, mặc định `-0.2` |
+| `--rl-novelty-bonus` | Thưởng finding mới, mặc định `2.0` |
+| `--rl-duplicate-penalty` | Phạt finding trùng, mặc định `1.0` |
 
 Chạy judge bằng Ollama local thay vì rule:
 
@@ -467,6 +482,112 @@ if self.config.adapter_config.config.get("enable_mutation"):
     variants = self.generator.generate_variants(cases, n_variants=self.config.n_variants)
     cases.extend(variants)
 self.scheduler.enqueue(cases)
+```
+
+### 4.1. Q-learning Surface Selector
+
+Q-learning được dùng để chọn endpoint/surface tiếp theo thay vì chạy FIFO. Đây là RL đơn giản, phù hợp với bài toán vì mỗi action chạy xong có reward ngay từ oracle.
+
+Environment:
+
+```text
+EvalRunner + AttackScheduler + TargetAdapter + VulnerabilityOracle
+```
+
+Một step của environment:
+
+```text
+state_t -> chọn action category:surface -> lấy AttackCase tương ứng -> chạy workflow -> oracle trả Finding/None -> tính reward -> update Q-table
+```
+
+State:
+
+```text
+"start"
+"ASI02:tool_output|success"
+"ASI01:user_prompt|failed"
+"ASI06:memory_write|error"
+```
+
+State được thiết kế tối giản: trạng thái hiện tại là kết quả của action trước đó. Cách này đủ để selector học surface nào có reward tốt sau các kết quả gần nhất mà không cần neural network.
+
+Action:
+
+```text
+ASI01:user_prompt
+ASI01:uploaded_file_document
+ASI01:inter_agent_message
+ASI02:tool_output
+ASI02:plugin_skill_metadata
+ASI06:memory_write
+ASI06:inter_agent_message
+```
+
+Action là cặp `category:surface`, được lấy từ các `AttackCase` còn trong queue.
+
+Reward:
+
+```python
+if not finding:
+    reward = rl_no_finding_reward - rl_cost_penalty
+else:
+    reward = severity.score + confidence - rl_cost_penalty
+    if finding_is_new:
+        reward += rl_novelty_bonus
+    else:
+        reward -= rl_duplicate_penalty
+```
+
+Hyperparameters mặc định:
+
+| Hyperparameter | Default | Ý nghĩa |
+|---|---:|---|
+| `alpha` | `0.3` | Learning rate, mức cập nhật Q-value sau mỗi step |
+| `gamma` | `0.8` | Discount factor, mức quan tâm tới reward tương lai |
+| `epsilon` | `0.2` | Xác suất explore action ngẫu nhiên |
+| `initial_q` | `0.0` | Q-value ban đầu cho state/action chưa gặp |
+| `seed` | `7` | Seed để kết quả epsilon-greedy tái lập được |
+| `cost_penalty` | `0.1` | Phạt nhẹ mỗi lần chạy attack |
+| `no_finding_reward` | `-0.2` | Reward khi attack không tạo finding |
+| `novelty_bonus` | `2.0` | Thưởng finding mới, chưa trùng signature |
+| `duplicate_penalty` | `1.0` | Phạt finding trùng |
+
+Code Q-update:
+
+```python
+state_values[action] = old_q + self.config.alpha * (
+    reward + self.config.gamma * next_best - old_q
+)
+```
+
+Code chọn action epsilon-greedy:
+
+```python
+if self._rng.random() < self.config.epsilon:
+    return self._rng.choice(available_actions)
+
+return max(
+    available_actions,
+    key=lambda action: (
+        state_values.get(action, self.config.initial_q),
+        -self.action_attempts.get(action, 0),
+        action,
+    ),
+)
+```
+
+Trong report metadata sẽ có:
+
+```json
+{
+  "rl_surface_selection": {
+    "algorithm": "q_learning",
+    "hyperparameters": {},
+    "q_table": {},
+    "action_attempts": {},
+    "action_mean_reward": {}
+  }
+}
 ```
 
 ### 5. Search / Scheduler

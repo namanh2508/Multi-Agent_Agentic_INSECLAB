@@ -102,6 +102,21 @@ def cli() -> None:
     help="Generate deterministic paraphrased attack variants before scheduling",
 )
 @click.option(
+    "--rl-surface-selection",
+    type=click.Choice(["none", "q-learning"]),
+    default="none",
+    help="Use RL to choose the next category:surface action",
+)
+@click.option("--rl-alpha", type=float, default=0.3, help="Q-learning learning rate")
+@click.option("--rl-gamma", type=float, default=0.8, help="Q-learning discount factor")
+@click.option("--rl-epsilon", type=float, default=0.2, help="Q-learning epsilon-greedy exploration rate")
+@click.option("--rl-initial-q", type=float, default=0.0, help="Initial Q value")
+@click.option("--rl-seed", type=int, default=7, help="Random seed for epsilon-greedy action selection")
+@click.option("--rl-cost-penalty", type=float, default=0.1, help="Per-attack reward cost penalty")
+@click.option("--rl-no-finding-reward", type=float, default=-0.2, help="Reward when no vulnerability is found")
+@click.option("--rl-novelty-bonus", type=float, default=2.0, help="Reward bonus for a new finding signature")
+@click.option("--rl-duplicate-penalty", type=float, default=1.0, help="Reward penalty for duplicate finding signatures")
+@click.option(
     "--judge-provider",
     type=click.Choice(["rule", "ollama", "openai"]),
     default="rule",
@@ -137,6 +152,16 @@ def eval(
     max_attacks: int,
     n_variants: int,
     enable_mutation: bool,
+    rl_surface_selection: str,
+    rl_alpha: float,
+    rl_gamma: float,
+    rl_epsilon: float,
+    rl_initial_q: float,
+    rl_seed: int,
+    rl_cost_penalty: float,
+    rl_no_finding_reward: float,
+    rl_novelty_bonus: float,
+    rl_duplicate_penalty: float,
     judge_provider: str,
     judge_model: str,
     mutator_model: str,
@@ -155,6 +180,16 @@ def eval(
 
     adapter_config = _load_adapter_config(adapter, target)
     adapter_config["enable_mutation"] = enable_mutation
+    adapter_config["rl_surface_selection"] = rl_surface_selection
+    adapter_config["rl_alpha"] = rl_alpha
+    adapter_config["rl_gamma"] = rl_gamma
+    adapter_config["rl_epsilon"] = rl_epsilon
+    adapter_config["rl_initial_q"] = rl_initial_q
+    adapter_config["rl_seed"] = rl_seed
+    adapter_config["rl_cost_penalty"] = rl_cost_penalty
+    adapter_config["rl_no_finding_reward"] = rl_no_finding_reward
+    adapter_config["rl_novelty_bonus"] = rl_novelty_bonus
+    adapter_config["rl_duplicate_penalty"] = rl_duplicate_penalty
 
     category_list = [
         ASICategory(c.strip()) for c in categories.split(",")
