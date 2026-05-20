@@ -1,4 +1,6 @@
-*.md
+CLAUDE.md
+AGENTS.md
+PLAN.md
 logs/
 __pycache__/
 *.pyc
