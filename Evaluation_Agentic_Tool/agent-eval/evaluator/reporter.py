@@ -1,4 +1,5 @@
 import json
+import html
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -7,6 +8,13 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from core.models import EvalReport, Finding
 from core.enums import ASICategory, Severity
+
+
+def _h(text: str) -> str:
+    """Escape HTML special characters to prevent XSS."""
+    if text is None:
+        return ""
+    return html.escape(str(text), quote=True)
 
 
 class ReportGenerator:
@@ -114,30 +122,27 @@ class ReportGenerator:
 
     def _generate_html(self, report: EvalReport) -> str:
         summary = report.get_summary()
-
         vulnerability_count = len(report.findings)
-        severity_colors = {
-            Severity.CRITICAL: "#dc2626",
-            Severity.HIGH: "#ea580c",
-            Severity.MEDIUM: "#ca8a04",
-            Severity.LOW: "#65a30d",
-            Severity.INFO: "#6b7280",
-        }
-
-        summary = report.get_summary()
 
         metadata = report.metadata or {}
-        target_profile = metadata.get("target_profile", "unknown")
-        judge_provider = metadata.get("judge_provider", "unknown")
-        model = metadata.get("model", "unknown")
+        target_profile = _h(metadata.get("target_profile", "unknown"))
+        judge_provider = _h(metadata.get("judge_provider", "unknown"))
+        model = _h(metadata.get("model", "unknown"))
         total_executed = metadata.get("total_executed", report.total_cases)
+        report_id = _h(report.target_id)
+        timestamp_str = report.timestamp.strftime('%Y-%m-%d %H:%M:%S') if report.timestamp else 'N/A'
+
+        stats_total = _h(str(total_executed))
+        stats_vuln = _h(str(vulnerability_count))
+        stats_asi01 = _h(str(summary["categories"].get("ASI01", 0)))
+        stats_asi02 = _h(str(summary["categories"].get("ASI02", 0)))
 
         html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Security Evaluation Report - {report.target_id}</title>
+    <title>Security Evaluation Report - {report_id}</title>
     <style>
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -229,8 +234,8 @@ class ReportGenerator:
 <body>
     <div class="header">
         <h1>Security Evaluation Report</h1>
-        <p>Target: <strong>{report.target_id}</strong></p>
-        <p>Generated: {report.timestamp.strftime('%Y-%m-%d %H:%M:%S') if report.timestamp else 'N/A'}</p>
+        <p>Target: <strong>{report_id}</strong></p>
+        <p>Generated: {timestamp_str}</p>
     </div>
 
     <div class="metadata">
@@ -242,53 +247,58 @@ class ReportGenerator:
 
     <div class="stats">
         <div class="stat-card">
-            <div class="stat-value">{total_executed}</div>
+            <div class="stat-value">{stats_total}</div>
             <div class="stat-label">Total Cases</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{vulnerability_count}</div>
+            <div class="stat-value">{stats_vuln}</div>
             <div class="stat-label">Vulnerabilities</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{summary["categories"].get("ASI01", 0)}</div>
+            <div class="stat-value">{stats_asi01}</div>
             <div class="stat-label">Goal Hijacks (ASI01)</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">{summary["categories"].get("ASI02", 0)}</div>
+            <div class="stat-value">{stats_asi02}</div>
             <div class="stat-label">Tool Misuses (ASI02)</div>
         </div>
     </div>
 """
 
         for finding in report.findings:
-            severity_class = f"severity-{finding.severity.value}"
-            badge_class = f"badge-{finding.severity.value}"
+            severity_cls = _h(finding.severity.value)
+            severity_class = f"severity-{severity_cls}"
+            badge_class = f"badge-{severity_cls}"
+            cat_val = _h(finding.category.value)
+            cat_name = _h(finding.category.display_name)
+            case_id = _h(finding.attack_case_id)
+            conf = f"{finding.confidence:.1%}"
+            explanation = _h(finding.explanation)
 
             html += f"""
     <div class="finding {severity_class}">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <span class="severity-badge {badge_class}">{finding.severity.value}</span>
-            <span style="color: #6b7280; font-size: 0.875rem;">Confidence: {finding.confidence:.1%}</span>
+            <span class="severity-badge {badge_class}">{severity_cls}</span>
+            <span style="color: #6b7280; font-size: 0.875rem;">Confidence: {conf}</span>
         </div>
         <h3 style="margin: 0 0 0.5rem 0;">
-            <span style="color: #6b7280;">OWASP </span>{finding.category.value}
-            <span style="color: #374151; font-size: 0.9em;">{finding.category.display_name}</span>
+            <span style="color: #6b7280;">OWASP </span>{cat_val}
+            <span style="color: #374151; font-size: 0.9em;">{cat_name}</span>
         </h3>
-        <p style="color: #4b5563; margin: 0 0 1rem 0;">Case: {finding.attack_case_id}</p>
-        <p>{finding.explanation}</p>
+        <p style="color: #4b5563; margin: 0 0 1rem 0;">Case: {case_id}</p>
+        <p>{explanation}</p>
 """
-
             if finding.evidence:
                 html += """
         <h4 style="margin-bottom: 0.5rem;">Evidence:</h4>
         <div class="evidence">
 """
                 for ev in finding.evidence:
-                    html += f"- {ev}\n"
+                    ev_esc = _h(ev)
+                    html += f"- {ev_esc}\n"
                 html += """
         </div>
 """
-
             html += """
     </div>
 """

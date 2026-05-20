@@ -57,7 +57,7 @@ def cli() -> None:
 @cli.command()
 @click.option(
     "--adapter",
-    type=click.Choice(["mock", "openai", "langchain", "ollama", "custom", "multiagent"]),
+    type=click.Choice(["mock", "openai", "langchain", "ollama", "custom", "multiagent", "workflow"]),
     default="mock",
     help="Agent adapter type",
 )
@@ -154,7 +154,7 @@ def eval(
     ]
 
     eval_config = EvalConfig(
-        target_id=target or "default",
+        target_id=adapter_config.get("target_id", target or "default"),
         adapter_config=AdapterConfig(
             adapter_type=adapter,
             config=adapter_config,
@@ -242,6 +242,7 @@ def list_adapters() -> None:
         ("langchain", "LangChain agents adapter", "Available"),
         ("ollama", "Ollama local LLM adapter", "Available"),
         ("multiagent", "Multi-agent local target (Ollama)", "Available"),
+        ("workflow", "External workflow agent loaded from target YAML", "Available"),
         ("custom", "Custom adapter template", "Available"),
     ]
 
@@ -326,10 +327,11 @@ def _load_adapter_config(adapter_type: str, config_path: str | None) -> dict[str
             import json
             with open(path) as f:
                 config = json.load(f)
+        config["_target_path"] = str(path.resolve())
 
     if adapter_type == "openai":
         config.setdefault("api_key", os.getenv("OPENAI_API_KEY"))
-    elif adapter_type in ["ollama", "langchain", "multiagent"]:
+    elif adapter_type in ["ollama", "langchain", "multiagent", "workflow"]:
         config.setdefault("model", os.getenv("OLLAMA_MODEL", "llama3.2:3b"))
         config.setdefault("base_url", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
 

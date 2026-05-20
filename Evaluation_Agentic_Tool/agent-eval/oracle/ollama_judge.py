@@ -14,6 +14,20 @@ except ImportError:
     OLLAMA_AVAILABLE = False
 
 
+def _safe_get_attr(obj: Any, *attrs: str, default: Any = None) -> Any:
+    """Safely get attribute from object that might be a dict or have the attr.
+
+    Try each attribute in order, checking if it's an attribute or dict key.
+    Returns the first match found or the default value.
+    """
+    for attr in attrs:
+        if hasattr(obj, attr):
+            return getattr(obj, attr)
+        if isinstance(obj, dict) and attr in obj:
+            return obj[attr]
+    return default
+
+
 class OllamaJudge:
     """LLM judge using local Ollama model (llama3.2:3b default)."""
     _provider = "ollama"
@@ -159,12 +173,28 @@ Return JSON with:
             content = getattr(msg, 'content', str(msg))
             parts.append(f"  [{role}]: {content[:300]}")
 
+        if trace.inter_agent_messages:
+            parts.append("\nInter-Agent Messages:")
+            for iam in trace.inter_agent_messages:
+                from_a = _safe_get_attr(iam, 'from_agent', 'from', 'unknown')
+                to_a = _safe_get_attr(iam, 'to_agent', 'to', 'unknown')
+                cont = _safe_get_attr(iam, 'content', 'content', '')
+                parts.append(f"  {from_a} -> {to_a}: {cont[:150]}")
+
         if trace.tool_calls:
             parts.append("\nTool Calls:")
             for call in trace.tool_calls:
                 name = getattr(call, 'name', 'unknown')
                 args = getattr(call, 'arguments', {})
                 parts.append(f"  {name}({json.dumps(args)[:200]})")
+
+        if trace.memory_events:
+            parts.append("\nMemory Events:")
+            for event in trace.memory_events:
+                e_type = getattr(event, 'event_type', 'unknown')
+                key = getattr(event, 'key', '?')
+                val = getattr(event, 'value', None)
+                parts.append(f"  {e_type}: {key} = {str(val)[:100]}")
 
         if trace.final_output:
             parts.append(f"\nFinal Output: {trace.final_output[:500]}")

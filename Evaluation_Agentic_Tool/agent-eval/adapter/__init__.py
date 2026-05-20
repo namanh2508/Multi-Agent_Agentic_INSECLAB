@@ -2,6 +2,7 @@ from .base import BaseAdapter
 from .mock_adapter import MockAdapter
 from .ollama_adapter import OllamaAdapter
 from .custom_adapter import CustomAdapter, get_adapter
+from .workflow_adapter import WorkflowAdapter, create_workflow_adapter
 
 try:
     from .multiagent import MultiAgentAdapter
@@ -14,6 +15,8 @@ __all__ = [
     "MockAdapter",
     "OllamaAdapter",
     "CustomAdapter",
+    "WorkflowAdapter",
+    "create_workflow_adapter",
     "get_adapter",
 ]
 if _multiagent_available:

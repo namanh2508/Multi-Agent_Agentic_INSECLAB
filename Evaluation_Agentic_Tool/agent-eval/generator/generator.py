@@ -38,24 +38,35 @@ class AttackGenerator:
         categories: list[ASICategory] | None = None,
         max_cases: int | None = None,
     ) -> list[AttackCase]:
-        """Generate all attack cases.
+        """Generate attack cases distributed across categories.
 
         Args:
             categories: List of categories to generate (default: all)
             max_cases: Maximum number of cases to generate
 
         Returns:
-            List of AttackCase objects
+            List of AttackCase objects distributed across categories
         """
         categories = categories or list(ASICategory)
-        all_cases = []
+        per_category: dict[ASICategory, list[AttackCase]] = {}
 
         for category in categories:
-            cases = self.generate_for_category(category)
-            all_cases.extend(cases)
+            per_category[category] = self.generate_for_category(category)
 
-        if max_cases and len(all_cases) > max_cases:
-            all_cases = all_cases[:max_cases]
+        if not max_cases:
+            all_cases: list[AttackCase] = []
+            for category in categories:
+                all_cases.extend(per_category[category])
+            return all_cases
+
+        n_cats = len(categories)
+        base = max_cases // n_cats
+        remainder = max_cases % n_cats
+
+        all_cases = []
+        for i, category in enumerate(categories):
+            take = base + (1 if i < remainder else 0)
+            all_cases.extend(per_category[category][:take])
 
         return all_cases
 

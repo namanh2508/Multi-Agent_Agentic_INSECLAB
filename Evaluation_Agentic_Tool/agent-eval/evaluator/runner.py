@@ -122,6 +122,13 @@ class EvalRunner:
                 "categories": [c.value for c in categories],
                 "total_executed": executed,
                 "success_rate": self.scheduler.get_success_rate(),
+                "target_input_type": self.config.adapter_config.config.get("target_input_type")
+                or (
+                    "workflow"
+                    if self.config.adapter_config.adapter_type == "workflow"
+                    else self.config.adapter_config.adapter_type
+                ),
+                "entrypoint": self.config.adapter_config.config.get("entrypoint"),
                 "target_profile": self.config.adapter_config.config.get("profile", "unknown"),
                 "model": self.config.adapter_config.config.get("model", "unknown"),
                 "judge_provider": getattr(self.judge, "_provider", "unknown"),

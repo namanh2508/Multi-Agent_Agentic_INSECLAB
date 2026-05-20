@@ -169,12 +169,28 @@ Example:
             content = msg.content if hasattr(msg, 'content') else str(msg)
             parts.append(f"  [{role}]: {content[:300]}")
 
+        if trace.inter_agent_messages:
+            parts.append("\nInter-Agent Messages:")
+            for iam in trace.inter_agent_messages:
+                from_a = getattr(iam, 'from_agent', getattr(iam, 'from', 'unknown'))
+                to_a = getattr(iam, 'to_agent', getattr(iam, 'to', 'unknown'))
+                cont = getattr(iam, 'content', getattr(iam, 'content', ''))
+                parts.append(f"  {from_a} -> {to_a}: {cont[:150]}")
+
         if trace.tool_calls:
             parts.append("\nTool Calls:")
             for call in trace.tool_calls:
                 name = call.name if hasattr(call, 'name') else str(call)
                 args = call.arguments if hasattr(call, 'arguments') else {}
                 parts.append(f"  {name}({json.dumps(args)[:200]})")
+
+        if trace.memory_events:
+            parts.append("\nMemory Events:")
+            for event in trace.memory_events:
+                e_type = getattr(event, 'event_type', 'unknown')
+                key = getattr(event, 'key', '?')
+                val = getattr(event, 'value', None)
+                parts.append(f"  {e_type}: {key} = {str(val)[:100]}")
 
         if trace.final_output:
             parts.append(f"\nFinal Output: {trace.final_output[:500]}")

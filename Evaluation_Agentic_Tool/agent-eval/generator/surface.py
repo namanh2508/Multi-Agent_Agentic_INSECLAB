@@ -11,24 +11,32 @@ class AttackSurfaceDetector:
     def _detect_capabilities(self) -> dict[AttackSurface, bool]:
         tools = self.config.get("tools")
         memory_cfg = self.config.get("memory", {})
+        capabilities = self.config.get("capabilities", {}) or {}
 
         has_tools = (
             isinstance(tools, list) and len(tools) > 0
-        ) or self.config.get("has_tools", False)
+        ) or self.config.get("has_tools", False) or capabilities.get("tools", False)
 
         has_memory = (
             isinstance(memory_cfg, dict) and memory_cfg.get("enabled", False)
-        ) or self.config.get("has_memory", False)
+        ) or self.config.get("has_memory", False) or capabilities.get("memory", False)
+
+        has_retrieval = (
+            self.config.get("has_web_search", False)
+            or capabilities.get("retrieval", False)
+        )
+
+        has_rag = self.config.get("has_rag", False) or capabilities.get("retrieval", False)
 
         return {
             AttackSurface.USER_PROMPT: True,
-            AttackSurface.RETRIEVED_WEB_CONTENT: self.config.get("has_web_search", False),
+            AttackSurface.RETRIEVED_WEB_CONTENT: has_retrieval,
             AttackSurface.TOOL_OUTPUT: has_tools,
             AttackSurface.TOOL_DEFINITION: has_tools,
             AttackSurface.MEMORY_READ: has_memory,
             AttackSurface.MEMORY_WRITE: has_memory,
             AttackSurface.SYSTEM_PROMPT: self.config.get("has_system_prompt", False),
-            AttackSurface.CONTEXT_EXTENSION: self.config.get("has_rag", False),
+            AttackSurface.CONTEXT_EXTENSION: has_rag,
         }
 
     def get_available_surfaces(self) -> list[AttackSurface]:

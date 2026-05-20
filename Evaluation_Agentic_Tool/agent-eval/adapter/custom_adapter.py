@@ -58,7 +58,8 @@ def get_adapter(adapter_type: str, config: dict[str, Any] | None = None) -> Base
     """Factory function to get an adapter by type.
 
     Args:
-        adapter_type: Type of adapter ('openai', 'langchain', 'mock', 'custom', 'ollama', 'multiagent')
+        adapter_type: Type of adapter ('openai', 'langchain', 'mock', 'custom',
+            'ollama', 'multiagent', 'workflow')
         config: Configuration dict for the adapter
 
     Returns:
@@ -67,6 +68,11 @@ def get_adapter(adapter_type: str, config: dict[str, Any] | None = None) -> Base
     Raises:
         AdapterNotFoundError: If adapter type is not found
     """
+    if adapter_type.lower() == "workflow":
+        return __import__(
+            "adapter.workflow_adapter", fromlist=["create_workflow_adapter"]
+        ).create_workflow_adapter(config)
+
     adapters: dict[str, Type[BaseAdapter]] = {
         "mock": __import__(
             "adapter.mock_adapter", fromlist=["MockAdapter"]
@@ -88,7 +94,7 @@ def get_adapter(adapter_type: str, config: dict[str, Any] | None = None) -> Base
 
     adapter_class = adapters.get(adapter_type.lower())
     if not adapter_class:
-        available = list(adapters.keys())
+        available = [*adapters.keys(), "workflow"]
         raise AdapterError(
             f"Unknown adapter type: '{adapter_type}'. Available: {available}"
         )

@@ -37,11 +37,19 @@ class MemoryEvent(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
+class InterAgentMessage(BaseModel):
+    from_agent: str
+    to_agent: str
+    content: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class AgentTrace(BaseModel):
     target_id: str
     messages: list[Message] = Field(default_factory=list)
     tool_calls: list[ToolCall] = Field(default_factory=list)
     memory_events: list[MemoryEvent] = Field(default_factory=list)
+    inter_agent_messages: list[InterAgentMessage] = Field(default_factory=list)
     final_output: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -80,9 +88,11 @@ class EvalReport(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def get_summary(self) -> dict[str, Any]:
+        success_rate = self.metadata.get("success_rate", 0.0)
         return {
             "total_cases": self.total_cases,
             "total_findings": len(self.findings),
+            "success_rate": success_rate,
             "categories": {
                 cat.value: sum(1 for f in self.findings if f.category == cat)
                 for cat in ASICategory

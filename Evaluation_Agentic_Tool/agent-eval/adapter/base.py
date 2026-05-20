@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from core.models import AgentTrace, Message, ToolCall, MemoryEvent
+from core.models import AgentTrace, Message, ToolCall, MemoryEvent, InterAgentMessage
 
 
 class BaseAdapter(ABC):
@@ -51,6 +51,10 @@ class BaseAdapter(ABC):
     def get_memory_events(self) -> list[MemoryEvent]:
         """Get memory read/write events."""
 
+    def get_inter_agent_messages(self) -> list[InterAgentMessage]:
+        """Get inter-agent messages if the target exposes them."""
+        return []
+
     def get_trace(self) -> AgentTrace:
         """Build a complete execution trace."""
         return AgentTrace(
@@ -58,6 +62,7 @@ class BaseAdapter(ABC):
             messages=self.get_messages(),
             tool_calls=self.get_tool_calls(),
             memory_events=self.get_memory_events(),
+            inter_agent_messages=self.get_inter_agent_messages(),
             final_output=self.get_final_output(),
             metadata=self.config.copy(),
         )
