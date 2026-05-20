@@ -4,27 +4,32 @@ sys.path.insert(0, ".")
 from core.enums import ASICategory, AttackSurface
 from core.models import AttackCase
 from generator.scheduler import AttackScheduler
-from rl import QLearningConfig, QLearningSurfaceSelector
+from bandit import UCBConfig, UCBSurfaceSelector
 
 
-def test_q_learning_selector_updates_q_value():
-    selector = QLearningSurfaceSelector(QLearningConfig(
-        alpha=0.5,
-        gamma=0.0,
-        epsilon=0.0,
-        seed=1,
-    ))
+def test_ucb_selector_tries_unseen_actions_before_exploiting():
+    selector = UCBSurfaceSelector(UCBConfig(exploration_c=1.4))
 
-    action = selector.select_action(["ASI01:user_prompt"])
-    selector.update(
-        action=action,
-        reward=4.0,
-        outcome="success",
-        next_available_actions=[],
-    )
+    first = selector.select_action(["ASI01:user_prompt", "ASI02:tool_output"])
+    selector.update(first, reward=2.0)
+    second = selector.select_action(["ASI01:user_prompt", "ASI02:tool_output"])
 
-    assert selector.q_table["start"]["ASI01:user_prompt"] == 2.0
-    assert selector.get_stats()["action_attempts"]["ASI01:user_prompt"] == 1
+    assert first == "ASI01:user_prompt"
+    assert second == "ASI02:tool_output"
+
+
+def test_ucb_stats_include_reward_history():
+    selector = UCBSurfaceSelector()
+
+    action = selector.select_action(["user_prompt", "tool_output"])
+    selector.update(action, reward=4.0)
+
+    stats = selector.get_stats()
+
+    assert stats["algorithm"] == "ucb_bandit"
+    assert stats["reward_history"] == [4.0]
+    assert stats["cumulative_reward"] == [4.0]
+    assert stats["action_mean_reward"][action] == 4.0
 
 
 def test_scheduler_selects_case_by_category_surface_action():

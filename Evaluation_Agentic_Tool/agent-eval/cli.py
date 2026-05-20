@@ -33,6 +33,7 @@ from core.models import EvalConfig, AdapterConfig
 from adapter import get_adapter
 from evaluator import EvalRunner
 from oracle import get_judge, RuleBasedJudge
+from bandit import save_bandit_stats_and_plots
 
 console = Console(
     legacy_windows=False,
@@ -102,20 +103,22 @@ def cli() -> None:
     help="Generate deterministic paraphrased attack variants before scheduling",
 )
 @click.option(
-    "--rl-surface-selection",
-    type=click.Choice(["none", "q-learning"]),
+    "--surface-selection",
+    type=click.Choice(["none", "ucb"]),
     default="none",
-    help="Use RL to choose the next category:surface action",
+    help="Choose the next category:surface action with a selector",
 )
-@click.option("--rl-alpha", type=float, default=0.3, help="Q-learning learning rate")
-@click.option("--rl-gamma", type=float, default=0.8, help="Q-learning discount factor")
-@click.option("--rl-epsilon", type=float, default=0.2, help="Q-learning epsilon-greedy exploration rate")
-@click.option("--rl-initial-q", type=float, default=0.0, help="Initial Q value")
-@click.option("--rl-seed", type=int, default=7, help="Random seed for epsilon-greedy action selection")
-@click.option("--rl-cost-penalty", type=float, default=0.1, help="Per-attack reward cost penalty")
-@click.option("--rl-no-finding-reward", type=float, default=-0.2, help="Reward when no vulnerability is found")
-@click.option("--rl-novelty-bonus", type=float, default=2.0, help="Reward bonus for a new finding signature")
-@click.option("--rl-duplicate-penalty", type=float, default=1.0, help="Reward penalty for duplicate finding signatures")
+@click.option("--ucb-exploration-c", type=float, default=1.4, help="UCB exploration coefficient")
+@click.option("--reward-cost-penalty", type=float, default=0.1, help="Per-attack reward cost penalty")
+@click.option("--reward-no-finding", type=float, default=-0.2, help="Reward when no vulnerability is found")
+@click.option("--reward-novelty-bonus", type=float, default=2.0, help="Reward bonus for a new finding signature")
+@click.option("--reward-duplicate-penalty", type=float, default=1.0, help="Reward penalty for duplicate finding signatures")
+@click.option(
+    "--bandit-plot-dir",
+    type=click.Path(),
+    default=None,
+    help="Directory to save bandit_stats.json, action_value_table.svg, and reward_curve.svg",
+)
 @click.option(
     "--judge-provider",
     type=click.Choice(["rule", "ollama", "openai"]),
@@ -152,16 +155,13 @@ def eval(
     max_attacks: int,
     n_variants: int,
     enable_mutation: bool,
-    rl_surface_selection: str,
-    rl_alpha: float,
-    rl_gamma: float,
-    rl_epsilon: float,
-    rl_initial_q: float,
-    rl_seed: int,
-    rl_cost_penalty: float,
-    rl_no_finding_reward: float,
-    rl_novelty_bonus: float,
-    rl_duplicate_penalty: float,
+    surface_selection: str,
+    ucb_exploration_c: float,
+    reward_cost_penalty: float,
+    reward_no_finding: float,
+    reward_novelty_bonus: float,
+    reward_duplicate_penalty: float,
+    bandit_plot_dir: str | None,
     judge_provider: str,
     judge_model: str,
     mutator_model: str,
@@ -180,16 +180,12 @@ def eval(
 
     adapter_config = _load_adapter_config(adapter, target)
     adapter_config["enable_mutation"] = enable_mutation
-    adapter_config["rl_surface_selection"] = rl_surface_selection
-    adapter_config["rl_alpha"] = rl_alpha
-    adapter_config["rl_gamma"] = rl_gamma
-    adapter_config["rl_epsilon"] = rl_epsilon
-    adapter_config["rl_initial_q"] = rl_initial_q
-    adapter_config["rl_seed"] = rl_seed
-    adapter_config["rl_cost_penalty"] = rl_cost_penalty
-    adapter_config["rl_no_finding_reward"] = rl_no_finding_reward
-    adapter_config["rl_novelty_bonus"] = rl_novelty_bonus
-    adapter_config["rl_duplicate_penalty"] = rl_duplicate_penalty
+    adapter_config["surface_selection"] = surface_selection
+    adapter_config["ucb_exploration_c"] = ucb_exploration_c
+    adapter_config["reward_cost_penalty"] = reward_cost_penalty
+    adapter_config["reward_no_finding"] = reward_no_finding
+    adapter_config["reward_novelty_bonus"] = reward_novelty_bonus
+    adapter_config["reward_duplicate_penalty"] = reward_duplicate_penalty
 
     category_list = [
         ASICategory(c.strip()) for c in categories.split(",")
@@ -268,6 +264,17 @@ def eval(
         console.print(f"\nReport saved to: [blue]{output}[/blue]")
     except Exception as e:
         console.print(f"[yellow]Warning: Could not save report: {e}[/yellow]")
+
+    if bandit_plot_dir:
+        bandit_stats = report.metadata.get("surface_selection", {})
+        if bandit_stats.get("algorithm") == "ucb_bandit":
+            try:
+                save_bandit_stats_and_plots(bandit_stats, bandit_plot_dir)
+                console.print(f"Bandit plots saved to: [blue]{bandit_plot_dir}[/blue]")
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not save bandit plots: {e}[/yellow]")
+        else:
+            console.print("[yellow]Bandit plots skipped because UCB selection was not enabled.[/yellow]")
 
 
 @cli.command()

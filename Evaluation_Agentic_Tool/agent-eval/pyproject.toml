@@ -46,7 +46,7 @@ langchain-agent = [
 agent-eval = "cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["core", "adapter", "generator", "oracle", "evaluator"]
+packages = ["core", "adapter", "generator", "oracle", "evaluator", "bandit"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

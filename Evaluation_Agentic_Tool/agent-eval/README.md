@@ -177,10 +177,10 @@ Nếu muốn bật mutation/paraphrase để sinh thêm biến thể attack:
 python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --enable-mutation --n-variants 3 --max-attacks 20 --output reports\daa_security_mutation_report.html
 ```
 
-Nếu muốn dùng Q-learning để quyết định chọn attack surface endpoint:
+Nếu muốn dùng UCB/contextual multi-armed bandit để quyết định chọn attack surface endpoint:
 
 ```powershell
-python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --rl-surface-selection q-learning --rl-alpha 0.3 --rl-gamma 0.8 --rl-epsilon 0.2 --max-attacks 30 --output reports\daa_security_q_learning_report.html
+python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --surface-selection ucb --ucb-exploration-c 1.4 --max-attacks 30 --output reports\daa_security_ucb_report.html --bandit-plot-dir reports\bandit
 ```
 
 Giải thích tham số:
@@ -193,15 +193,27 @@ Giải thích tham số:
 | `--judge-provider rule` | Dùng judge offline, không cần API |
 | `--max-attacks 20` | Số attack case tối đa |
 | `--output ...html` | File report kết quả |
-| `--rl-surface-selection q-learning` | Bật Q-learning selector thay cho FIFO surface scheduling |
-| `--rl-alpha` | Learning rate, mặc định `0.3` |
-| `--rl-gamma` | Discount factor, mặc định `0.8` |
-| `--rl-epsilon` | Epsilon-greedy exploration rate, mặc định `0.2` |
-| `--rl-initial-q` | Giá trị Q ban đầu, mặc định `0.0` |
-| `--rl-cost-penalty` | Phạt chi phí mỗi attack, mặc định `0.1` |
-| `--rl-no-finding-reward` | Reward khi không có finding, mặc định `-0.2` |
-| `--rl-novelty-bonus` | Thưởng finding mới, mặc định `2.0` |
-| `--rl-duplicate-penalty` | Phạt finding trùng, mặc định `1.0` |
+| `--surface-selection ucb` | Bật UCB bandit selector thay cho FIFO surface scheduling |
+| `--ucb-exploration-c` | Hệ số exploration của UCB, mặc định `1.4` |
+| `--reward-cost-penalty` | Phạt chi phí mỗi attack, mặc định `0.1` |
+| `--reward-no-finding` | Reward khi không có finding, mặc định `-0.2` |
+| `--reward-novelty-bonus` | Thưởng finding mới, mặc định `2.0` |
+| `--reward-duplicate-penalty` | Phạt finding trùng, mặc định `1.0` |
+| `--bandit-plot-dir` | Thư mục xuất `bandit_stats.json`, `action_value_table.svg`, `reward_curve.svg` |
+
+Khi bật `--bandit-plot-dir reports\bandit`, tool sẽ tạo thêm:
+
+```text
+reports\bandit\bandit_stats.json
+reports\bandit\action_value_table.svg
+reports\bandit\reward_curve.svg
+```
+
+Nếu đã có sẵn file `bandit_stats.json`, có thể render lại biểu đồ bằng lệnh:
+
+```powershell
+python examples\plot_bandit_metrics.py --stats reports\bandit\bandit_stats.json --output-dir reports\bandit
+```
 
 Chạy judge bằng Ollama local thay vì rule:
 
@@ -484,9 +496,9 @@ if self.config.adapter_config.config.get("enable_mutation"):
 self.scheduler.enqueue(cases)
 ```
 
-### 4.1. Q-learning Surface Selector
+### 4.1. UCB Surface Selector
 
-Q-learning được dùng để chọn endpoint/surface tiếp theo thay vì chạy FIFO. Đây là RL đơn giản, phù hợp với bài toán vì mỗi action chạy xong có reward ngay từ oracle.
+Hiện tại hệ thống dùng UCB/contextual multi-armed bandit để chọn endpoint/surface tiếp theo thay vì chạy FIFO. Cách này phù hợp với giai đoạn hiện tại, vì mỗi attack surface có reward ngay sau khi oracle đánh giá và chưa cần học chuỗi trạng thái dài.
 
 Environment:
 
@@ -497,19 +509,8 @@ EvalRunner + AttackScheduler + TargetAdapter + VulnerabilityOracle
 Một step của environment:
 
 ```text
-state_t -> chọn action category:surface -> lấy AttackCase tương ứng -> chạy workflow -> oracle trả Finding/None -> tính reward -> update Q-table
+chọn action category:surface -> lấy AttackCase tương ứng -> chạy workflow -> oracle trả Finding/None -> tính reward -> update mean reward / attempt count
 ```
-
-State:
-
-```text
-"start"
-"ASI02:tool_output|success"
-"ASI01:user_prompt|failed"
-"ASI06:memory_write|error"
-```
-
-State được thiết kế tối giản: trạng thái hiện tại là kết quả của action trước đó. Cách này đủ để selector học surface nào có reward tốt sau các kết quả gần nhất mà không cần neural network.
 
 Action:
 
@@ -525,70 +526,116 @@ ASI06:inter_agent_message
 
 Action là cặp `category:surface`, được lấy từ các `AttackCase` còn trong queue.
 
+Policy chọn action của UCB:
+
+```text
+score(action) = mean_reward(action) + c * sqrt(log(total_attempts) / attempts(action))
+```
+
+- `mean_reward(action)`: reward trung bình của surface đó.
+- `attempts(action)`: số lần surface đó đã được thử.
+- `c`: hệ số exploration, mặc định `1.4`.
+- Action chưa thử sẽ được ưu tiên trước để có dữ liệu ban đầu.
+
 Reward:
 
 ```python
 if not finding:
-    reward = rl_no_finding_reward - rl_cost_penalty
+    reward = reward_no_finding - reward_cost_penalty
 else:
-    reward = severity.score + confidence - rl_cost_penalty
+    reward = severity.score + confidence - reward_cost_penalty
     if finding_is_new:
-        reward += rl_novelty_bonus
+        reward += reward_novelty_bonus
     else:
-        reward -= rl_duplicate_penalty
+        reward -= reward_duplicate_penalty
 ```
 
 Hyperparameters mặc định:
 
 | Hyperparameter | Default | Ý nghĩa |
 |---|---:|---|
-| `alpha` | `0.3` | Learning rate, mức cập nhật Q-value sau mỗi step |
-| `gamma` | `0.8` | Discount factor, mức quan tâm tới reward tương lai |
-| `epsilon` | `0.2` | Xác suất explore action ngẫu nhiên |
-| `initial_q` | `0.0` | Q-value ban đầu cho state/action chưa gặp |
-| `seed` | `7` | Seed để kết quả epsilon-greedy tái lập được |
-| `cost_penalty` | `0.1` | Phạt nhẹ mỗi lần chạy attack |
-| `no_finding_reward` | `-0.2` | Reward khi attack không tạo finding |
-| `novelty_bonus` | `2.0` | Thưởng finding mới, chưa trùng signature |
-| `duplicate_penalty` | `1.0` | Phạt finding trùng |
+| `exploration_c` | `1.4` | Mức ưu tiên exploration trong UCB |
+| `reward_cost_penalty` | `0.1` | Phạt nhẹ mỗi lần chạy attack |
+| `reward_no_finding` | `-0.2` | Reward khi attack không tạo finding |
+| `reward_novelty_bonus` | `2.0` | Thưởng finding mới, chưa trùng signature |
+| `reward_duplicate_penalty` | `1.0` | Phạt finding trùng |
 
-Code Q-update:
+Code chọn action UCB trong `bandit/ucb.py`:
 
 ```python
-state_values[action] = old_q + self.config.alpha * (
-    reward + self.config.gamma * next_best - old_q
-)
-```
-
-Code chọn action epsilon-greedy:
-
-```python
-if self._rng.random() < self.config.epsilon:
-    return self._rng.choice(available_actions)
+for action in available_actions:
+    if self.action_attempts.get(action, 0) == 0:
+        return action
 
 return max(
     available_actions,
     key=lambda action: (
-        state_values.get(action, self.config.initial_q),
+        self._ucb_score(action, total_attempts),
         -self.action_attempts.get(action, 0),
         action,
     ),
 )
 ```
 
+Code UCB score:
+
+```python
+mean_reward = self.action_rewards.get(action, 0.0) / attempts
+exploration = self.config.exploration_c * math.sqrt(
+    math.log(max(total_attempts, 1)) / attempts
+)
+return mean_reward + exploration
+```
+
+Code update bandit sau mỗi attack:
+
+```python
+self.action_attempts[action] = self.action_attempts.get(action, 0) + 1
+self.action_rewards[action] = self.action_rewards.get(action, 0.0) + reward
+self.reward_history.append(reward)
+```
+
 Trong report metadata sẽ có:
 
 ```json
 {
-  "rl_surface_selection": {
-    "algorithm": "q_learning",
-    "hyperparameters": {},
-    "q_table": {},
+  "surface_selection": {
+    "algorithm": "ucb_bandit",
+    "hyperparameters": {
+      "exploration_c": 1.4
+    },
     "action_attempts": {},
-    "action_mean_reward": {}
+    "action_mean_reward": {},
+    "reward_history": [],
+    "cumulative_reward": []
   }
 }
 ```
+
+Code xuất action value table và reward curve nằm trong `bandit/visualization.py`:
+
+```python
+def save_bandit_stats_and_plots(stats: dict[str, Any], output_dir: str | Path) -> None:
+    output = Path(output_dir)
+    output.mkdir(parents=True, exist_ok=True)
+    (output / "bandit_stats.json").write_text(
+        json.dumps(stats, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    save_action_value_table_svg(stats, output / "action_value_table.svg")
+    save_reward_curve_svg(stats, output / "reward_curve.svg")
+```
+
+CLI gọi hàm này sau khi report đã được tạo:
+
+```python
+if bandit_plot_dir:
+    bandit_stats = report.metadata.get("surface_selection", {})
+    if bandit_stats.get("algorithm") == "ucb_bandit":
+        save_bandit_stats_and_plots(bandit_stats, bandit_plot_dir)
+```
+
+Lưu ý: bản hiện tại chỉ dùng UCB bandit nên không có discount factor, learning rate hay epsilon-greedy.
 
 ### 5. Search / Scheduler
 
@@ -743,6 +790,7 @@ Sau khi chạy CLI, bạn sẽ có:
 - Report HTML ở đường dẫn truyền vào `--output`.
 - Trace từng attack trong `logs/layer_*.json`.
 - Summary trên terminal: tổng số case, số finding, success rate, severity.
+- Nếu dùng `--bandit-plot-dir`, có thêm `bandit_stats.json`, `action_value_table.svg`, `reward_curve.svg`.
 
 Một finding tốt cần có:
 
