@@ -77,11 +77,14 @@ class AttackGenerator:
 
         builders = template.to_builders(
             surface_policy=self.surface_detector.get_surface_policy(surfaces[0])
-            if surfaces else ""
+            if surfaces else "",
+            policy_resolver=self.surface_detector.get_surface_policy,
         )
 
         cases = []
         for builder in builders:
+            if surfaces and builder.surface not in surfaces:
+                continue
             generated = builder.build(base_id=category.value)
             cases.extend(generated)
 

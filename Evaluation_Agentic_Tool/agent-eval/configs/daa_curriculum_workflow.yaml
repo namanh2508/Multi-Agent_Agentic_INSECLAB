@@ -17,3 +17,5 @@ capabilities:
   memory: true
   inter_agent_messages: true
   retrieval: true
+  uploaded_files: true
+  plugin_skill_metadata: true

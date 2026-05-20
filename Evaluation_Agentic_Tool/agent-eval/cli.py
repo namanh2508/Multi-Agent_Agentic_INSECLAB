@@ -97,6 +97,11 @@ def cli() -> None:
     help="Number of variants per attack seed",
 )
 @click.option(
+    "--enable-mutation",
+    is_flag=True,
+    help="Generate deterministic paraphrased attack variants before scheduling",
+)
+@click.option(
     "--judge-provider",
     type=click.Choice(["rule", "ollama", "openai"]),
     default="rule",
@@ -131,6 +136,7 @@ def eval(
     output_format: str,
     max_attacks: int,
     n_variants: int,
+    enable_mutation: bool,
     judge_provider: str,
     judge_model: str,
     mutator_model: str,
@@ -148,6 +154,7 @@ def eval(
     console.print()
 
     adapter_config = _load_adapter_config(adapter, target)
+    adapter_config["enable_mutation"] = enable_mutation
 
     category_list = [
         ASICategory(c.strip()) for c in categories.split(",")

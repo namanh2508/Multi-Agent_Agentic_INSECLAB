@@ -23,6 +23,7 @@ class EvidenceExtractor:
         evidence = []
 
         evidence.extend(self._extract_from_messages(trace.messages, objective))
+        evidence.extend(self._extract_from_inter_agent_messages(trace.inter_agent_messages, objective))
         evidence.extend(self._extract_from_tool_calls(trace.tool_calls, objective))
         evidence.extend(self._extract_from_memory(trace.memory_events, objective))
 
@@ -38,6 +39,16 @@ class EvidenceExtractor:
             content = msg.content if hasattr(msg, 'content') else str(msg)
             if self._matches_objective(content, objective):
                 evidence.append(f"Message ({msg.role}): {content[:200]}")
+        return evidence
+
+    def _extract_from_inter_agent_messages(self, messages: list, objective: str) -> list[str]:
+        evidence = []
+        for msg in messages:
+            content = msg.content if hasattr(msg, 'content') else str(msg)
+            from_agent = getattr(msg, 'from_agent', 'unknown')
+            to_agent = getattr(msg, 'to_agent', 'unknown')
+            if self._matches_objective(content, objective):
+                evidence.append(f"Inter-agent message ({from_agent} -> {to_agent}): {content[:200]}")
         return evidence
 
     def _extract_from_tool_calls(self, tool_calls: list, objective: str) -> list[str]:

@@ -52,6 +52,25 @@ def test_custom_capabilities():
     assert detector.capabilities[AttackSurface.MEMORY_READ] is True
 
 
+def test_full_architecture_capabilities():
+    detector = AttackSurfaceDetector({
+        "capabilities": {
+            "tools": True,
+            "memory": True,
+            "retrieval": True,
+            "uploaded_files": True,
+            "plugin_skill_metadata": True,
+            "inter_agent_messages": True,
+        }
+    })
+
+    surfaces = detector.get_available_surfaces()
+
+    assert AttackSurface.UPLOADED_FILE_DOCUMENT in surfaces
+    assert AttackSurface.PLUGIN_SKILL_METADATA in surfaces
+    assert AttackSurface.INTER_AGENT_MESSAGE in surfaces
+
+
 def test_get_available_surfaces():
     detector = AttackSurfaceDetector({"has_tools": True})
     surfaces = detector.get_available_surfaces()
@@ -63,3 +82,9 @@ def test_get_surface_policy():
     detector = AttackSurfaceDetector()
     policy = detector.get_surface_policy(AttackSurface.USER_PROMPT)
     assert len(policy) > 0
+
+
+def test_surface_risk_text():
+    detector = AttackSurfaceDetector()
+    risk = detector.get_surface_risk(AttackSurface.INTER_AGENT_MESSAGE)
+    assert "inter-agent" in risk.lower()

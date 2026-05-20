@@ -7,7 +7,7 @@ from adapter.base import BaseAdapter
 from core.enums import ASICategory, AttackState
 from core.models import AgentTrace, EvalConfig
 from core.exceptions import EvaluationError
-from generator import AttackGenerator, AttackScheduler
+from generator import AttackGenerator, AttackScheduler, ParaphraseMutator
 from oracle import VulnerabilityJudge, PolicyLoader
 from .aggregator import FindingAggregator
 from .reporter import ReportGenerator
@@ -67,6 +67,13 @@ class EvalRunner:
             categories=categories,
             max_cases=max_attacks,
         )
+        if self.config.adapter_config.config.get("enable_mutation"):
+            self.generator.set_mutator(ParaphraseMutator())
+            variants = self.generator.generate_variants(
+                cases,
+                n_variants=self.config.n_variants,
+            )
+            cases.extend(variants)
         self.scheduler.enqueue(cases)
 
         logger.info(f"Generated {len(cases)} attack cases")

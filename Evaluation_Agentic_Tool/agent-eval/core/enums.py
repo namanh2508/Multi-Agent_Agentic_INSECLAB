@@ -50,10 +50,13 @@ class Severity(str, Enum):
 class AttackSurface(str, Enum):
     USER_PROMPT = "user_prompt"
     RETRIEVED_WEB_CONTENT = "retrieved_web_content"
+    UPLOADED_FILE_DOCUMENT = "uploaded_file_document"
     TOOL_OUTPUT = "tool_output"
     TOOL_DEFINITION = "tool_definition"
     MEMORY_READ = "memory_read"
     MEMORY_WRITE = "memory_write"
+    PLUGIN_SKILL_METADATA = "plugin_skill_metadata"
+    INTER_AGENT_MESSAGE = "inter_agent_message"
     SYSTEM_PROMPT = "system_prompt"
     CONTEXT_EXTENSION = "context_extension"
 

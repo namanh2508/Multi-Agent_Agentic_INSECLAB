@@ -58,16 +58,17 @@ class AttackTemplate:
             attacks=data.get("attacks", []),
         )
 
-    def to_builders(self, surface_policy: str) -> list[AttackCaseBuilder]:
+    def to_builders(self, surface_policy: str, policy_resolver=None) -> list[AttackCaseBuilder]:
         """Convert template to list of AttackCaseBuilder objects."""
         builders = []
         for attack in self.attacks:
+            surface = AttackSurface(attack["surface"])
             builders.append(AttackCaseBuilder(
                 category=self.category,
                 objective=attack["objective"],
-                surface=AttackSurface(attack["surface"]),
+                surface=surface,
                 seeds=attack.get("seeds", []),
-                surface_policy=surface_policy,
+                surface_policy=policy_resolver(surface) if policy_resolver else surface_policy,
                 metadata={"template": self.name},
             ))
         return builders
