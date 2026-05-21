@@ -2,7 +2,10 @@ CLAUDE.md
 AGENTS.md
 PLAN.md
 logs/
+reports/
 __pycache__/
+.pytest_cache/
+pytest-cache-files-*/
 *.pyc
 *.pyo
 *.so
