@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 from typing import Any
+import unicodedata
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -18,6 +20,12 @@ class CurriculumDocument:
     title: str
     url: str
     text: str
+
+
+@dataclass
+class CurriculumQueryIntent:
+    year: str
+    major: str
 
 
 class LocalOllamaClient:
@@ -209,11 +217,17 @@ class CurriculumRetrieverAgent:
     name = "CurriculumRetrieverAgent"
 
     def search(self, query: str, documents: list[CurriculumDocument], limit: int = 5) -> list[CurriculumDocument]:
+        intent = _parse_curriculum_query_intent(query)
+        if intent:
+            focused = self._search_curriculum_intent(intent, documents)
+            if focused:
+                return focused[:limit]
+
         query_terms = _tokenize(query)
         scored: list[tuple[int, CurriculumDocument]] = []
 
         for doc in documents:
-            haystack = f"{doc.title} {doc.text}".lower()
+            haystack = _normalize_for_match(f"{doc.title} {doc.text}")
             score = sum(1 for term in query_terms if term in haystack)
             if score:
                 scored.append((score, doc))
@@ -224,6 +238,24 @@ class CurriculumRetrieverAgent:
         scored.sort(key=lambda item: item[0], reverse=True)
         return [doc for _, doc in scored[:limit]]
 
+    def _search_curriculum_intent(
+        self,
+        intent: CurriculumQueryIntent,
+        documents: list[CurriculumDocument],
+    ) -> list[CurriculumDocument]:
+        title_matches = []
+        text_matches = []
+
+        for doc in documents:
+            title = _normalize_for_match(doc.title)
+            text = _normalize_for_match(doc.text)
+            if intent.major in title and intent.year in title:
+                title_matches.append(doc)
+            elif intent.major in text and intent.year in text:
+                text_matches.append(doc)
+
+        return title_matches or text_matches
+
 
 class CurriculumAnswerAgent:
     name = "CurriculumAnswerAgent"
@@ -232,6 +264,12 @@ class CurriculumAnswerAgent:
         self.llm = llm
 
     def answer(self, question: str, docs: list[CurriculumDocument]) -> str:
+        intent = _parse_curriculum_query_intent(question)
+        if intent:
+            intent_answer = self._answer_curriculum_intent(intent, docs)
+            if intent_answer:
+                return intent_answer
+
         citations = []
         bullets = []
         for doc in docs[:4]:
@@ -271,6 +309,38 @@ class CurriculumAnswerAgent:
             return deterministic_answer
 
         return "\n".join([llm_answer, "", "Trích dẫn:", *citations])
+
+    def _answer_curriculum_intent(
+        self,
+        intent: CurriculumQueryIntent,
+        docs: list[CurriculumDocument],
+    ) -> str:
+        matched = [
+            doc for doc in docs
+            if intent.major in _normalize_for_match(doc.title)
+            and intent.year in _normalize_for_match(doc.title)
+        ]
+        if not matched:
+            matched = [
+                doc for doc in docs
+                if intent.major in _normalize_for_match(doc.text)
+                and intent.year in _normalize_for_match(doc.text)
+            ]
+
+        if not matched:
+            return ""
+
+        citations = [f"[{doc.doc_id}] {doc.title} - {doc.url}" for doc in matched[:2]]
+        evidence = [f"- {doc.title} [{doc.doc_id}]" for doc in matched[:2]]
+        return "\n".join([
+            f"Có. Dữ liệu đã nạp có ngành này trong khóa {intent.year}.",
+            "",
+            "Bằng chứng:",
+            *evidence,
+            "",
+            "Trích dẫn:",
+            *citations,
+        ])
 
 
 class CurriculumReviewAgent:
@@ -469,12 +539,39 @@ def _normalize_text(text: str) -> str:
 
 
 def _tokenize(text: str) -> set[str]:
-    normalized = _normalize_text(text.lower())
+    normalized = _normalize_for_match(text)
     return {
         token.strip(".,:;!?()[]{}\"'")
         for token in normalized.split()
         if len(token.strip(".,:;!?()[]{}\"'")) >= 2
     }
+
+
+def _normalize_for_match(text: str) -> str:
+    normalized = unicodedata.normalize("NFD", text.lower())
+    without_marks = "".join(char for char in normalized if unicodedata.category(char) != "Mn")
+    without_marks = without_marks.replace("đ", "d")
+    return _normalize_text(re.sub(r"[^a-z0-9]+", " ", without_marks))
+
+
+def _parse_curriculum_query_intent(question: str) -> CurriculumQueryIntent | None:
+    normalized = _normalize_for_match(question)
+    year_match = re.search(r"\b(20\d{2})\b", normalized)
+    if not year_match or "nganh " not in f"{normalized} ":
+        return None
+
+    major_part = normalized.split("nganh ", 1)[1]
+    for marker in (" khong", " co ", " chua", " nao", " gi"):
+        marker_index = major_part.find(marker)
+        if marker_index >= 0:
+            major_part = major_part[:marker_index]
+            break
+
+    major = _normalize_text(major_part.strip(" .,;:?!"))
+    if len(major.split()) < 2:
+        return None
+
+    return CurriculumQueryIntent(year=year_match.group(1), major=major)
 
 
 def _best_excerpt(question: str, text: str, max_len: int = 220) -> str:

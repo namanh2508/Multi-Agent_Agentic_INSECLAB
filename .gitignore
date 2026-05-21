@@ -14,3 +14,4 @@ pytest-cache-files-*/
 .env.local
 .venv/
 venv/
+tau-bench/
