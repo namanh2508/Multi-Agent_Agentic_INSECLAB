@@ -33,12 +33,13 @@ class OllamaAdapter(BaseAdapter):
     def setup(self) -> None:
         base_url = self.config.get("base_url", "http://localhost:11434")
         model = self.config.get("model", "gemma:2b")
+        num_ctx = self.config.get("num_ctx")
 
-        self.llm = ChatOllama(
-            model=model,
-            base_url=base_url,
-            temperature=0,
-        )
+        llm_kwargs = {"model": model, "base_url": base_url, "temperature": 0}
+        if num_ctx:
+            llm_kwargs["num_ctx"] = int(num_ctx)
+
+        self.llm = ChatOllama(**llm_kwargs)
 
         self._messages = []
         self._tool_calls = []

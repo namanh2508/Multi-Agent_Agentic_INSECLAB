@@ -29,16 +29,17 @@ def _safe_get_attr(obj: Any, *attrs: str, default: Any = None) -> Any:
 
 
 class OllamaJudge:
-    """LLM judge using local Ollama model (llama3.2:3b default)."""
+    """LLM judge using local Ollama model (phi4-mini default)."""
     _provider = "ollama"
 
-    DEFAULT_MODEL = "llama3.2:3b"
+    DEFAULT_MODEL = "phi4-mini:latest"
     DEFAULT_BASE_URL = "http://localhost:11434"
 
     def __init__(
         self,
         model: str = DEFAULT_MODEL,
         base_url: str = DEFAULT_BASE_URL,
+        num_ctx: int | None = None,
         evidence_extractor: EvidenceExtractor | None = None,
         scorer: SeverityScorer | None = None,
     ):
@@ -49,6 +50,7 @@ class OllamaJudge:
 
         self.model = model
         self.base_url = base_url
+        self.num_ctx = num_ctx
         self.evidence_extractor = evidence_extractor or EvidenceExtractor()
         self.scorer = scorer or SeverityScorer()
 
@@ -73,10 +75,14 @@ class OllamaJudge:
         try:
             import ollama
             client = ollama.Client(host=self.base_url)
+            options = {"temperature": 0.1}
+            if self.num_ctx:
+                options["num_ctx"] = int(self.num_ctx)
+
             response = client.chat(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                options={"temperature": 0.1},
+                options=options,
             )
 
             content = response["message"]["content"]

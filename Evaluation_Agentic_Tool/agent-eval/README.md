@@ -29,17 +29,19 @@ Khởi động Ollama và bảo đảm đã có hai model local:
 
 ```powershell
 ollama serve
-ollama pull qwen2.5:32b
-ollama pull llama3.2:3b
+ollama pull llama3.1:8b
+ollama pull phi4-mini
 ```
 
 Trong workflow Task 1, hai model được chia như sau:
 
 | Agent | Model | Lý do |
 |---|---|---|
-| `CurriculumAnswerAgent` | `qwen2.5:32b` | Trả lời câu hỏi cần nhiều năng lực đọc hiểu, tổng hợp, citation |
-| `CurriculumReviewAgent` | `llama3.2:3b` | Review ngắn, nhẹ hơn, tiết kiệm tài nguyên |
+| `CurriculumAnswerAgent` | `llama3.1:8b` | Trả lời câu hỏi cần năng lực đọc hiểu, tổng hợp và citation tốt hơn |
+| `CurriculumReviewAgent` | `phi4-mini:latest` | Review ngắn, nhẹ hơn, tiết kiệm tài nguyên |
 | `CurriculumCrawlerAgent`, `CurriculumReaderAgent`, `CurriculumRetrieverAgent` | Không dùng LLM | Crawl, parse, search bằng code |
+
+Lưu ý RAM: không dùng `ollama run llama3.1:8b` hoặc `ollama run phi4-mini` để kiểm tra trong terminal nếu bị lỗi thiếu RAM, vì lệnh này dùng context mặc định của model. Tool gọi Ollama qua API với `num_ctx: 1024`, nên nhu cầu RAM thấp hơn.
 
 Cấu hình nằm trong `configs/daa_curriculum_workflow.yaml`:
 
@@ -47,9 +49,10 @@ Cấu hình nằm trong `configs/daa_curriculum_workflow.yaml`:
 config:
   use_ollama: true
   models:
-    answer: qwen2.5:32b
-    review: llama3.2:3b
+    answer: llama3.1:8b
+    review: phi4-mini:latest
   base_url: http://localhost:11434
+  num_ctx: 1024
 ```
 
 ## Task 1: Chạy Workflow Multi-Agent DAA
@@ -65,7 +68,7 @@ https://daa.uit.edu.vn/chuong-trinh-dao-tao-tu-khoa-7-tro-di
 Chạy hỏi đáp trực tiếp:
 
 ```powershell
-python examples\daa_curriculum_query.py "Khóa 2025 có ngành Khoa học dữ liệu không?" --answer-model qwen2.5:32b --review-model llama3.2:3b
+python examples\daa_curriculum_query.py "Khóa 2025 có ngành Khoa học dữ liệu không?" --answer-model llama3.1:8b --review-model phi4-mini:latest --num-ctx 1024
 ```
 
 Nếu muốn chạy nhanh offline bằng fixture test, không gọi DAA thật và không gọi Ollama:
@@ -81,8 +84,8 @@ flowchart TD
     U["User question"] --> C["CoordinatorAgent"]
     C --> R["CurriculumRetrieverAgent"]
     R --> T["Tool call: search_curriculum"]
-    T --> A["CurriculumAnswerAgent<br/>qwen2.5:32b"]
-    A --> V["CurriculumReviewAgent<br/>llama3.2:3b"]
+    T --> A["CurriculumAnswerAgent<br/>llama3.1:8b"]
+    A --> V["CurriculumReviewAgent<br/>phi4-mini:latest"]
     V --> O["Final answer + citations + internal review"]
 ```
 
@@ -171,6 +174,12 @@ Chạy đánh giá workflow DAA:
 python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --max-attacks 20 --output reports\daa_security_report.html
 ```
 
+Nếu mạng tới trang DAA không ổn định, dùng cấu hình offline có fixture nhưng vẫn chạy hai agent LLM local:
+
+```powershell
+python cli.py eval --adapter workflow --target configs\daa_curriculum_offline.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --max-attacks 3 --output reports\daa_offline_security_report.html
+```
+
 Nếu muốn bật mutation/paraphrase để sinh thêm biến thể attack:
 
 ```powershell
@@ -218,7 +227,7 @@ python examples\plot_bandit_metrics.py --stats reports\bandit\bandit_stats.json 
 Chạy judge bằng Ollama local thay vì rule:
 
 ```powershell
-python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider ollama --judge-model llama3.2:3b --max-attacks 20 --output reports\daa_ollama_judge_report.html
+python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider ollama --judge-model phi4-mini:latest --max-attacks 20 --output reports\daa_ollama_judge_report.html
 ```
 
 Nên bắt đầu bằng `--judge-provider rule` để test nhanh và ổn định. Sau đó mới dùng Ollama judge để có đánh giá mềm hơn.
@@ -250,8 +259,9 @@ target_id: my_agentic_workflow
 entrypoint: path.to.module:create_workflow
 entrypoint_type: factory
 config:
-  model: llama3.2:3b
+  model: llama3.1:8b
   base_url: http://localhost:11434
+  num_ctx: 1024
 capabilities:
   tools: true
   memory: true
@@ -299,8 +309,9 @@ config:
   source_url: https://daa.uit.edu.vn/chuong-trinh-dao-tao-tu-khoa-7-tro-di
   use_ollama: true
   models:
-    answer: qwen2.5:32b
-    review: llama3.2:3b
+    answer: llama3.1:8b
+    review: phi4-mini:latest
+  num_ctx: 1024
 capabilities:
   tools: true
   memory: true

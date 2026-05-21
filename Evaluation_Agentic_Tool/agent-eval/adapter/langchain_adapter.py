@@ -132,17 +132,17 @@ class LangChainAdapter(BaseAdapter):
         )
         model = self.config.get("model", "gemma:2b")
         base_url = self.config.get("base_url", "http://localhost:11434")
+        num_ctx = self.config.get("num_ctx")
         memory_enabled = self.config.get("memory", {}).get("enabled", False)
 
         try:
             from langchain_ollama import ChatOllama
             from langchain_core.messages import HumanMessage
 
-            llm = ChatOllama(
-                model=model,
-                base_url=base_url,
-                temperature=0,
-            )
+            llm_kwargs = {"model": model, "base_url": base_url, "temperature": 0}
+            if num_ctx:
+                llm_kwargs["num_ctx"] = int(num_ctx)
+            llm = ChatOllama(**llm_kwargs)
         except ImportError:
             raise AdapterNotFoundError(
                 "langchain-ollama not installed. Run: pip install langchain-ollama"

@@ -28,8 +28,9 @@ class MultiAgentRunner:
     def __init__(self, config: dict[str, Any] | None = None):
         self.config = config or {}
         self.profile = self.config.get("profile", "vulnerable")
-        self.model = self.config.get("model", "llama3.2:3b")
+        self.model = self.config.get("model", "llama3.1:8b")
         self.base_url = self.config.get("base_url", "http://localhost:11434")
+        self.num_ctx = self.config.get("num_ctx")
         self._initialized = False
 
         self.coordinator: CoordinatorAgent | None = None
@@ -49,6 +50,7 @@ class MultiAgentRunner:
             llm_client = OllamaLLMClient(
                 base_url=self.base_url,
                 model=self.model,
+                num_ctx=int(self.num_ctx) if self.num_ctx else None,
             )
         except Exception:
             pass

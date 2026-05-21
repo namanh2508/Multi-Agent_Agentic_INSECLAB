@@ -127,7 +127,7 @@ def cli() -> None:
 )
 @click.option(
     "--judge-model",
-    default="llama3.2:3b",
+    default="phi4-mini:latest",
     help="Model for LLM-based judges (ollama or openai)",
 )
 @click.option(
@@ -223,6 +223,8 @@ def eval(
                 judge_kwargs["base_url"] = adapter_config.get(
                     "base_url", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
                 )
+                if adapter_config.get("num_ctx"):
+                    judge_kwargs["num_ctx"] = int(adapter_config["num_ctx"])
             elif judge_provider == "openai":
                 judge_kwargs["api_key"] = adapter_config.get("api_key") or os.getenv("OPENAI_API_KEY")
                 judge_kwargs["model"] = judge_model
@@ -350,7 +352,7 @@ def list_judges() -> None:
 
     judges = [
         ("rule", "N/A", "Deterministic rule-based, no LLM required", "Yes"),
-        ("ollama", "llama3.2:3b", "Local Ollama model (requires ollama pull)", "No"),
+        ("ollama", "phi4-mini:latest", "Local Ollama model (requires ollama pull)", "No"),
         ("openai", "gpt-4o", "OpenAI API (requires OPENAI_API_KEY)", "No"),
     ]
 
@@ -381,7 +383,7 @@ def _load_adapter_config(adapter_type: str, config_path: str | None) -> dict[str
     if adapter_type == "openai":
         config.setdefault("api_key", os.getenv("OPENAI_API_KEY"))
     elif adapter_type in ["ollama", "langchain", "multiagent", "workflow"]:
-        config.setdefault("model", os.getenv("OLLAMA_MODEL", "llama3.2:3b"))
+        config.setdefault("model", os.getenv("OLLAMA_MODEL", "llama3.1:8b"))
         config.setdefault("base_url", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
 
     return config

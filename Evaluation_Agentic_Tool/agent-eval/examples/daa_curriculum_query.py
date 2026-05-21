@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--review-model")
     parser.add_argument("--base-url", default="http://localhost:11434")
     parser.add_argument("--llm-timeout", type=float, default=30)
+    parser.add_argument("--num-ctx", type=int)
     args = parser.parse_args()
 
     config = {
@@ -34,6 +35,7 @@ def main() -> None:
         },
         "base_url": args.base_url,
         "llm_timeout": args.llm_timeout,
+        "num_ctx": args.num_ctx,
     }
     if args.fixture_html_path:
         config["fixture_html_path"] = str(Path(args.fixture_html_path).resolve())

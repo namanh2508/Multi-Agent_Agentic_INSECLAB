@@ -25,6 +25,7 @@ class LocalOllamaClient:
         self.model = model or config.get("model")
         self.base_url = config.get("base_url", "http://localhost:11434").rstrip("/")
         self.timeout = float(config.get("llm_timeout", 60))
+        self.num_ctx = config.get("num_ctx")
         self.last_error = ""
 
     def generate(self, prompt: str) -> str:
@@ -32,9 +33,12 @@ class LocalOllamaClient:
             return ""
 
         try:
+            payload: dict[str, Any] = {"model": self.model, "prompt": prompt, "stream": False}
+            if self.num_ctx:
+                payload["options"] = {"num_ctx": int(self.num_ctx), "temperature": 0}
             response = httpx.post(
                 f"{self.base_url}/api/generate",
-                json={"model": self.model, "prompt": prompt, "stream": False},
+                json=payload,
                 timeout=self.timeout,
             )
             response.raise_for_status()

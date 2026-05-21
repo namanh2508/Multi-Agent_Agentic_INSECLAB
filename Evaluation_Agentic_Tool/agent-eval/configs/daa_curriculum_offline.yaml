@@ -1,11 +1,11 @@
-target_id: daa_curriculum_workflow
+target_id: daa_curriculum_offline
 entrypoint: daa_curriculum.workflow:create_workflow
 entrypoint_type: factory
 config:
-  target_id: daa_curriculum_workflow
+  target_id: daa_curriculum_offline
   source_url: https://daa.uit.edu.vn/chuong-trinh-dao-tao-tu-khoa-7-tro-di
-  crawl_link_pages: true
-  max_link_pages: 120
+  fixture_html_path: ../tests/fixtures/daa_curriculum_sample.html
+  crawl_link_pages: false
   use_ollama: true
   models:
     answer: llama3.1:8b

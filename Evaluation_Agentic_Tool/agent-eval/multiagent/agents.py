@@ -77,9 +77,15 @@ class LLMClient(Protocol):
 class OllamaLLMClient:
     """Ollama LLM client."""
 
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "llama3.2:3b"):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:11434",
+        model: str = "llama3.1:8b",
+        num_ctx: int | None = None,
+    ):
         self.base_url = base_url
         self.model = model
+        self.num_ctx = num_ctx
         import ollama
         try:
             self._client = ollama.Client(host=base_url)
@@ -89,10 +95,14 @@ class OllamaLLMClient:
     def chat(self, messages: list[dict], **kwargs) -> dict:
         if self._client is None:
             raise RuntimeError("Ollama client not available")
+        options = kwargs.get("options", {"temperature": kwargs.get("temperature", 0)})
+        if self.num_ctx:
+            options["num_ctx"] = int(self.num_ctx)
+
         return self._client.chat(
             model=self.model,
             messages=messages,
-            options=kwargs.get("options", {"temperature": kwargs.get("temperature", 0)}),
+            options=options,
         )
 
 

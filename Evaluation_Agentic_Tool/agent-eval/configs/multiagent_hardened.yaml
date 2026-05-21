@@ -7,8 +7,9 @@ description: "Multi-agent system with hardened profile - validates all external 
 
 profile: "hardened"
 
-model: "llama3.2:3b"
+model: "llama3.1:8b"
 base_url: "http://localhost:11434"
+num_ctx: 1024
 
 # Agent roles
 agents:
