@@ -177,10 +177,10 @@ Nếu muốn bật mutation/paraphrase để sinh thêm biến thể attack:
 python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --enable-mutation --n-variants 3 --max-attacks 20 --output reports\daa_security_mutation_report.html
 ```
 
-Nếu muốn dùng UCB/contextual multi-armed bandit để quyết định chọn attack surface endpoint:
+Nếu muốn dùng contextual multi-armed bandit (CMAB) để quyết định chọn attack surface endpoint:
 
 ```powershell
-python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --surface-selection ucb --ucb-exploration-c 1.4 --max-attacks 30 --output reports\daa_security_ucb_report.html --bandit-plot-dir reports\bandit
+python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --surface-selection cmab --cmab-exploration-c 1.4 --max-attacks 30 --output reports\daa_security_cmab_report.html --bandit-plot-dir reports\bandit
 ```
 
 Giải thích tham số:
@@ -193,19 +193,19 @@ Giải thích tham số:
 | `--judge-provider rule` | Dùng judge offline, không cần API |
 | `--max-attacks 20` | Số attack case tối đa |
 | `--output ...html` | File report kết quả |
-| `--surface-selection ucb` | Bật UCB bandit selector thay cho FIFO surface scheduling |
-| `--ucb-exploration-c` | Hệ số exploration của UCB, mặc định `1.4` |
+| `--surface-selection cmab` | Bật contextual UCB bandit selector thay cho FIFO surface scheduling |
+| `--cmab-exploration-c` | Hệ số exploration của contextual UCB, mặc định `1.4` |
 | `--reward-cost-penalty` | Phạt chi phí mỗi attack, mặc định `0.1` |
 | `--reward-no-finding` | Reward khi không có finding, mặc định `-0.2` |
 | `--reward-novelty-bonus` | Thưởng finding mới, mặc định `2.0` |
 | `--reward-duplicate-penalty` | Phạt finding trùng, mặc định `1.0` |
-| `--bandit-plot-dir` | Thư mục xuất `bandit_stats.json`, `action_value_table.svg`, `reward_curve.svg` |
+| `--bandit-plot-dir` | Thư mục xuất `bandit_stats.json`, `context_action_value_table.svg`, `reward_curve.svg` |
 
 Khi bật `--bandit-plot-dir reports\bandit`, tool sẽ tạo thêm:
 
 ```text
 reports\bandit\bandit_stats.json
-reports\bandit\action_value_table.svg
+reports\bandit\context_action_value_table.svg
 reports\bandit\reward_curve.svg
 ```
 
@@ -496,9 +496,9 @@ if self.config.adapter_config.config.get("enable_mutation"):
 self.scheduler.enqueue(cases)
 ```
 
-### 4.1. UCB Surface Selector
+### 4.1. CMAB Surface Selector
 
-Hiện tại hệ thống dùng UCB/contextual multi-armed bandit để chọn endpoint/surface tiếp theo thay vì chạy FIFO. Cách này phù hợp với giai đoạn hiện tại, vì mỗi attack surface có reward ngay sau khi oracle đánh giá và chưa cần học chuỗi trạng thái dài.
+Hiện tại hệ thống dùng contextual multi-armed bandit (CMAB) với policy contextual UCB để chọn endpoint/surface tiếp theo thay vì chạy FIFO. Khác với UCB thường, CMAB không chỉ học reward trung bình theo action toàn cục, mà học reward của từng action trong từng context đánh giá.
 
 Environment:
 
@@ -509,8 +509,20 @@ EvalRunner + AttackScheduler + TargetAdapter + VulnerabilityOracle
 Một step của environment:
 
 ```text
-chọn action category:surface -> lấy AttackCase tương ứng -> chạy workflow -> oracle trả Finding/None -> tính reward -> update mean reward / attempt count
+build context -> chọn action category:surface -> lấy AttackCase tương ứng -> chạy workflow -> oracle trả Finding/None -> tính reward -> update context-action mean reward / attempt count
 ```
+
+Context:
+
+```text
+profile=<target profile>|last_outcome=<start|finding|no_finding|error>|findings=<0|1|2plus>
+```
+
+Context hiện tại lấy từ trạng thái evaluation trước mỗi attack:
+
+- `profile`: profile target, ví dụ `vulnerable`, `hardened`, hoặc `unknown`.
+- `last_outcome`: kết quả attack gần nhất.
+- `findings`: bucket số finding đã thấy trong run hiện tại.
 
 Action:
 
@@ -526,16 +538,18 @@ ASI06:inter_agent_message
 
 Action là cặp `category:surface`, được lấy từ các `AttackCase` còn trong queue.
 
-Policy chọn action của UCB:
+Policy chọn action của contextual UCB:
 
 ```text
-score(action) = mean_reward(action) + c * sqrt(log(total_attempts) / attempts(action))
+score(context, action) =
+  mean_reward(context, action)
+  + c * sqrt(log(total_attempts(context)) / attempts(context, action))
 ```
 
-- `mean_reward(action)`: reward trung bình của surface đó.
-- `attempts(action)`: số lần surface đó đã được thử.
+- `mean_reward(context, action)`: reward trung bình của action trong context hiện tại.
+- `attempts(context, action)`: số lần action đó đã được thử trong context hiện tại.
 - `c`: hệ số exploration, mặc định `1.4`.
-- Action chưa thử sẽ được ưu tiên trước để có dữ liệu ban đầu.
+- Action chưa thử trong context hiện tại sẽ được ưu tiên trước để có dữ liệu ban đầu.
 
 Reward:
 
@@ -554,33 +568,35 @@ Hyperparameters mặc định:
 
 | Hyperparameter | Default | Ý nghĩa |
 |---|---:|---|
-| `exploration_c` | `1.4` | Mức ưu tiên exploration trong UCB |
+| `exploration_c` | `1.4` | Mức ưu tiên exploration trong contextual UCB |
 | `reward_cost_penalty` | `0.1` | Phạt nhẹ mỗi lần chạy attack |
 | `reward_no_finding` | `-0.2` | Reward khi attack không tạo finding |
 | `reward_novelty_bonus` | `2.0` | Thưởng finding mới, chưa trùng signature |
 | `reward_duplicate_penalty` | `1.0` | Phạt finding trùng |
 
-Code chọn action UCB trong `bandit/ucb.py`:
+Code chọn action CMAB trong `bandit/contextual_ucb.py`:
 
 ```python
+attempts = self.context_action_attempts.setdefault(context, {})
 for action in available_actions:
-    if self.action_attempts.get(action, 0) == 0:
+    if attempts.get(action, 0) == 0:
         return action
 
 return max(
     available_actions,
     key=lambda action: (
-        self._ucb_score(action, total_attempts),
-        -self.action_attempts.get(action, 0),
+        self._ucb_score(context, action, total_attempts),
+        -attempts.get(action, 0),
         action,
     ),
 )
 ```
 
-Code UCB score:
+Code contextual UCB score:
 
 ```python
-mean_reward = self.action_rewards.get(action, 0.0) / attempts
+reward_total = self.context_action_rewards.get(context, {}).get(action, 0.0)
+mean_reward = reward_total / attempts
 exploration = self.config.exploration_c * math.sqrt(
     math.log(max(total_attempts, 1)) / attempts
 )
@@ -590,9 +606,12 @@ return mean_reward + exploration
 Code update bandit sau mỗi attack:
 
 ```python
-self.action_attempts[action] = self.action_attempts.get(action, 0) + 1
-self.action_rewards[action] = self.action_rewards.get(action, 0.0) + reward
+attempts = self.context_action_attempts.setdefault(context, {})
+rewards = self.context_action_rewards.setdefault(context, {})
+attempts[action] = attempts.get(action, 0) + 1
+rewards[action] = rewards.get(action, 0.0) + reward
 self.reward_history.append(reward)
+self.context_history.append(context)
 ```
 
 Trong report metadata sẽ có:
@@ -600,19 +619,22 @@ Trong report metadata sẽ có:
 ```json
 {
   "surface_selection": {
-    "algorithm": "ucb_bandit",
+    "algorithm": "contextual_ucb_bandit",
     "hyperparameters": {
       "exploration_c": 1.4
     },
+    "context_action_attempts": {},
+    "context_action_mean_reward": {},
     "action_attempts": {},
     "action_mean_reward": {},
+    "context_history": [],
     "reward_history": [],
     "cumulative_reward": []
   }
 }
 ```
 
-Code xuất action value table và reward curve nằm trong `bandit/visualization.py`:
+Code xuất context-action value table và reward curve nằm trong `bandit/visualization.py`:
 
 ```python
 def save_bandit_stats_and_plots(stats: dict[str, Any], output_dir: str | Path) -> None:
@@ -622,7 +644,7 @@ def save_bandit_stats_and_plots(stats: dict[str, Any], output_dir: str | Path) -
         json.dumps(stats, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    save_action_value_table_svg(stats, output / "action_value_table.svg")
+    save_context_action_value_table_svg(stats, output / "context_action_value_table.svg")
     save_reward_curve_svg(stats, output / "reward_curve.svg")
 ```
 
@@ -631,11 +653,11 @@ CLI gọi hàm này sau khi report đã được tạo:
 ```python
 if bandit_plot_dir:
     bandit_stats = report.metadata.get("surface_selection", {})
-    if bandit_stats.get("algorithm") == "ucb_bandit":
+    if bandit_stats.get("algorithm") == "contextual_ucb_bandit":
         save_bandit_stats_and_plots(bandit_stats, bandit_plot_dir)
 ```
 
-Lưu ý: bản hiện tại chỉ dùng UCB bandit nên không có discount factor, learning rate hay epsilon-greedy.
+Lưu ý: CMAB vẫn không dùng discount factor, learning rate hay epsilon-greedy. Nó học online bằng thống kê reward theo từng context-action, không cần train offline trước.
 
 ### 5. Search / Scheduler
 
@@ -790,7 +812,7 @@ Sau khi chạy CLI, bạn sẽ có:
 - Report HTML ở đường dẫn truyền vào `--output`.
 - Trace từng attack trong `logs/layer_*.json`.
 - Summary trên terminal: tổng số case, số finding, success rate, severity.
-- Nếu dùng `--bandit-plot-dir`, có thêm `bandit_stats.json`, `action_value_table.svg`, `reward_curve.svg`.
+- Nếu dùng `--bandit-plot-dir`, có thêm `bandit_stats.json`, `context_action_value_table.svg`, `reward_curve.svg`.
 
 Một finding tốt cần có:
 

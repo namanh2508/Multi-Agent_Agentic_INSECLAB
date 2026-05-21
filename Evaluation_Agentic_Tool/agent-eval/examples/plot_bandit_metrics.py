@@ -4,9 +4,9 @@ from bandit.visualization import save_bandit_plots
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Render UCB bandit action values and reward curve SVG files.")
+    parser = argparse.ArgumentParser(description="Render CMAB context-action values and reward curve SVG files.")
     parser.add_argument("--stats", required=True, help="Path to bandit_stats.json")
-    parser.add_argument("--output-dir", default="reports/bandit", help="Directory for action_value_table.svg and reward_curve.svg")
+    parser.add_argument("--output-dir", default="reports/bandit", help="Directory for context_action_value_table.svg and reward_curve.svg")
     args = parser.parse_args()
 
     save_bandit_plots(args.stats, args.output_dir)

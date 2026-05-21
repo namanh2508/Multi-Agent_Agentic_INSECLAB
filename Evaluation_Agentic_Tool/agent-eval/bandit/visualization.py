@@ -8,39 +8,55 @@ def load_stats(path: str | Path) -> dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def save_action_value_table_svg(stats: dict[str, Any], output_path: str | Path) -> None:
-    mean_rewards = stats.get("action_mean_reward", {})
-    attempts = stats.get("action_attempts", {})
-    actions = sorted(set(mean_rewards) | set(attempts))
+def save_context_action_value_table_svg(stats: dict[str, Any], output_path: str | Path) -> None:
+    mean_rewards = stats.get("context_action_mean_reward", {})
+    attempts = stats.get("context_action_attempts", {})
+    rows = [
+        (context, action)
+        for context, action_rewards in mean_rewards.items()
+        for action in action_rewards
+    ]
+    rows.extend(
+        (context, action)
+        for context, action_attempts in attempts.items()
+        for action in action_attempts
+        if (context, action) not in rows
+    )
+    rows.sort()
 
-    width = 840
+    width = 1120
     row_h = 36
     header_h = 70
-    height = header_h + max(1, len(actions)) * row_h + 30
+    height = header_h + max(1, len(rows)) * row_h + 30
 
-    values = [float(mean_rewards.get(action, 0.0)) for action in actions]
+    values = [
+        float(mean_rewards.get(context, {}).get(action, 0.0))
+        for context, action in rows
+    ]
     min_v = min(values) if values else 0.0
     max_v = max(values) if values else 1.0
 
     parts = [
         _svg_start(width, height),
         '<rect width="100%" height="100%" fill="#ffffff"/>',
-        '<text x="20" y="28" font-size="18" font-family="Arial" font-weight="700">UCB Action Value Table</text>',
-        '<text x="20" y="58" font-size="12" font-family="Arial" font-weight="700">Action</text>',
-        '<text x="470" y="58" font-size="12" font-family="Arial" font-weight="700">Attempts</text>',
-        '<text x="590" y="58" font-size="12" font-family="Arial" font-weight="700">Mean reward</text>',
+        '<text x="20" y="28" font-size="18" font-family="Arial" font-weight="700">CMAB Context-Action Value Table</text>',
+        '<text x="20" y="58" font-size="12" font-family="Arial" font-weight="700">Context</text>',
+        '<text x="470" y="58" font-size="12" font-family="Arial" font-weight="700">Action</text>',
+        '<text x="830" y="58" font-size="12" font-family="Arial" font-weight="700">Attempts</text>',
+        '<text x="940" y="58" font-size="12" font-family="Arial" font-weight="700">Mean reward</text>',
     ]
 
-    if not actions:
+    if not rows:
         parts.append('<text x="20" y="92" font-size="13" font-family="Arial">No bandit data available.</text>')
     else:
-        for i, action in enumerate(actions):
+        for i, (context, action) in enumerate(rows):
             y = header_h + i * row_h
-            value = float(mean_rewards.get(action, 0.0))
+            value = float(mean_rewards.get(context, {}).get(action, 0.0))
             parts.append(f'<rect x="12" y="{y - 4}" width="{width - 24}" height="{row_h - 2}" fill="{_heat_color(value, min_v, max_v)}" stroke="#e5e7eb"/>')
-            parts.append(f'<text x="20" y="{y + 18}" font-size="12" font-family="Arial">{html.escape(action[:64])}</text>')
-            parts.append(f'<text x="470" y="{y + 18}" font-size="12" font-family="Arial">{int(attempts.get(action, 0))}</text>')
-            parts.append(f'<text x="590" y="{y + 18}" font-size="12" font-family="Arial">{value:.2f}</text>')
+            parts.append(f'<text x="20" y="{y + 18}" font-size="12" font-family="Arial">{html.escape(context[:62])}</text>')
+            parts.append(f'<text x="470" y="{y + 18}" font-size="12" font-family="Arial">{html.escape(action[:48])}</text>')
+            parts.append(f'<text x="830" y="{y + 18}" font-size="12" font-family="Arial">{int(attempts.get(context, {}).get(action, 0))}</text>')
+            parts.append(f'<text x="940" y="{y + 18}" font-size="12" font-family="Arial">{value:.2f}</text>')
 
     parts.append("</svg>")
     Path(output_path).write_text("\n".join(parts), encoding="utf-8")
@@ -105,7 +121,7 @@ def save_bandit_plots(stats_path: str | Path, output_dir: str | Path) -> None:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     stats = load_stats(stats_path)
-    save_action_value_table_svg(stats, output / "action_value_table.svg")
+    save_context_action_value_table_svg(stats, output / "context_action_value_table.svg")
     save_reward_curve_svg(stats, output / "reward_curve.svg")
 
 
@@ -116,7 +132,7 @@ def save_bandit_stats_and_plots(stats: dict[str, Any], output_dir: str | Path) -
         json.dumps(stats, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
-    save_action_value_table_svg(stats, output / "action_value_table.svg")
+    save_context_action_value_table_svg(stats, output / "context_action_value_table.svg")
     save_reward_curve_svg(stats, output / "reward_curve.svg")
 
 

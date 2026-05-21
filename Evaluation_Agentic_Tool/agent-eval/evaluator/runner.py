@@ -9,7 +9,7 @@ from core.models import AgentTrace, EvalConfig
 from core.exceptions import EvaluationError
 from generator import AttackGenerator, AttackScheduler, ParaphraseMutator
 from oracle import VulnerabilityJudge, PolicyLoader
-from bandit import UCBConfig, UCBSurfaceSelector
+from bandit import CMABConfig, ContextualUCBSurfaceSelector
 from .aggregator import FindingAggregator
 from .reporter import ReportGenerator
 
@@ -83,12 +83,15 @@ class EvalRunner:
 
         findings = []
         executed = 0
+        last_outcome = "start"
 
         while not self.scheduler.is_empty() and executed < max_attacks:
             selected_action = None
+            selected_context = None
             if surface_selector:
                 available_actions = self.scheduler.get_available_action_keys()
-                selected_action = surface_selector.select_action(available_actions)
+                selected_context = self._build_selection_context(last_outcome, len(findings))
+                selected_action = surface_selector.select_action(selected_context, available_actions)
                 case = self.scheduler.next_for_action(selected_action)
             else:
                 case = self.scheduler.next()
@@ -121,11 +124,14 @@ class EvalRunner:
                         findings.append(finding)
                         self.scheduler.update_feedback(case.id, AttackState.SUCCESS)
                         logger.info(f"Vulnerability found: {case.id}")
+                        last_outcome = "finding"
                     else:
                         self.scheduler.update_feedback(case.id, AttackState.FAILED)
+                        last_outcome = "no_finding"
 
-                    if surface_selector and selected_action:
+                    if surface_selector and selected_context and selected_action:
                         surface_selector.update(
+                            context=selected_context,
                             action=selected_action,
                             reward=reward,
                         )
@@ -135,8 +141,10 @@ class EvalRunner:
             except Exception as e:
                 logger.error(f"Attack {case.id} failed: {e}")
                 self.scheduler.update_feedback(case.id, AttackState.FAILED, str(e))
-                if surface_selector and selected_action:
+                last_outcome = "error"
+                if surface_selector and selected_context and selected_action:
                     surface_selector.update(
+                        context=selected_context,
                         action=selected_action,
                         reward=self._selection_error_reward(),
                     )
@@ -181,14 +189,24 @@ class EvalRunner:
 
         logger.info("Baseline trace generated")
 
-    def _build_surface_selector(self) -> UCBSurfaceSelector | None:
+    def _build_surface_selector(self) -> ContextualUCBSurfaceSelector | None:
         algorithm = self.config.adapter_config.config.get("surface_selection")
-        if algorithm != "ucb":
+        if algorithm != "cmab":
             return None
 
-        return UCBSurfaceSelector(UCBConfig(
-            exploration_c=float(self.config.adapter_config.config.get("ucb_exploration_c", 1.4)),
+        return ContextualUCBSurfaceSelector(CMABConfig(
+            exploration_c=float(self.config.adapter_config.config.get("cmab_exploration_c", 1.4)),
         ))
+
+    def _build_selection_context(self, last_outcome: str, finding_count: int) -> str:
+        profile = self.config.adapter_config.config.get("profile", "unknown")
+        if finding_count == 0:
+            finding_bucket = "0"
+        elif finding_count == 1:
+            finding_bucket = "1"
+        else:
+            finding_bucket = "2plus"
+        return f"profile={profile}|last_outcome={last_outcome}|findings={finding_bucket}"
 
     def _calculate_selection_reward(self, finding: Any | None) -> float:
         cost_penalty = float(self.config.adapter_config.config.get("reward_cost_penalty", 0.1))

@@ -104,11 +104,11 @@ def cli() -> None:
 )
 @click.option(
     "--surface-selection",
-    type=click.Choice(["none", "ucb"]),
+    type=click.Choice(["none", "cmab"]),
     default="none",
     help="Choose the next category:surface action with a selector",
 )
-@click.option("--ucb-exploration-c", type=float, default=1.4, help="UCB exploration coefficient")
+@click.option("--cmab-exploration-c", type=float, default=1.4, help="Contextual UCB exploration coefficient")
 @click.option("--reward-cost-penalty", type=float, default=0.1, help="Per-attack reward cost penalty")
 @click.option("--reward-no-finding", type=float, default=-0.2, help="Reward when no vulnerability is found")
 @click.option("--reward-novelty-bonus", type=float, default=2.0, help="Reward bonus for a new finding signature")
@@ -117,7 +117,7 @@ def cli() -> None:
     "--bandit-plot-dir",
     type=click.Path(),
     default=None,
-    help="Directory to save bandit_stats.json, action_value_table.svg, and reward_curve.svg",
+    help="Directory to save bandit_stats.json, context_action_value_table.svg, and reward_curve.svg",
 )
 @click.option(
     "--judge-provider",
@@ -156,7 +156,7 @@ def eval(
     n_variants: int,
     enable_mutation: bool,
     surface_selection: str,
-    ucb_exploration_c: float,
+    cmab_exploration_c: float,
     reward_cost_penalty: float,
     reward_no_finding: float,
     reward_novelty_bonus: float,
@@ -181,7 +181,7 @@ def eval(
     adapter_config = _load_adapter_config(adapter, target)
     adapter_config["enable_mutation"] = enable_mutation
     adapter_config["surface_selection"] = surface_selection
-    adapter_config["ucb_exploration_c"] = ucb_exploration_c
+    adapter_config["cmab_exploration_c"] = cmab_exploration_c
     adapter_config["reward_cost_penalty"] = reward_cost_penalty
     adapter_config["reward_no_finding"] = reward_no_finding
     adapter_config["reward_novelty_bonus"] = reward_novelty_bonus
@@ -267,14 +267,14 @@ def eval(
 
     if bandit_plot_dir:
         bandit_stats = report.metadata.get("surface_selection", {})
-        if bandit_stats.get("algorithm") == "ucb_bandit":
+        if bandit_stats.get("algorithm") == "contextual_ucb_bandit":
             try:
                 save_bandit_stats_and_plots(bandit_stats, bandit_plot_dir)
                 console.print(f"Bandit plots saved to: [blue]{bandit_plot_dir}[/blue]")
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not save bandit plots: {e}[/yellow]")
         else:
-            console.print("[yellow]Bandit plots skipped because UCB selection was not enabled.[/yellow]")
+            console.print("[yellow]Bandit plots skipped because CMAB selection was not enabled.[/yellow]")
 
 
 @cli.command()
