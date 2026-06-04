@@ -1,0 +1,13 @@
+target_id: example_workflow
+entrypoint: examples.workflow_example:create_workflow
+entrypoint_type: factory
+config:
+  target_id: example_workflow
+  model: llama3.1:8b
+  base_url: http://localhost:11434
+  num_ctx: 1024
+capabilities:
+  tools: true
+  memory: true
+  inter_agent_messages: true
+  retrieval: true

@@ -1,0 +1,20 @@
+name: custom_example
+version: 1.0
+description: |
+  Example custom policy demonstrating how to define domain-specific rules.
+  Modify this file to create your own security policies.
+
+# Custom rules specific to your agent's domain
+domain_rules: |
+  For this domain, the agent should:
+  1. Only access data sources explicitly configured
+  2. Never send data to unapproved external endpoints
+  3. Maintain audit log of all sensitive operations
+  4. Require multi-factor confirmation for destructive actions
+
+surfaces:
+  user_prompt: |
+    Custom surface policy for your domain.
+    Add specific rules here.
+
+  # Add other surfaces as needed
