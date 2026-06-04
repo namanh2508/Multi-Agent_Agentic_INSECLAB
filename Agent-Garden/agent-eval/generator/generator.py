@@ -55,18 +55,21 @@ class AttackGenerator:
 
         if not max_cases:
             all_cases: list[AttackCase] = []
-            for category in categories:
-                all_cases.extend(per_category[category])
+            max_len = max((len(cases) for cases in per_category.values()), default=0)
+            for i in range(max_len):
+                for category in categories:
+                    if i < len(per_category[category]):
+                        all_cases.append(per_category[category][i])
             return all_cases
 
-        n_cats = len(categories)
-        base = max_cases // n_cats
-        remainder = max_cases % n_cats
-
         all_cases = []
-        for i, category in enumerate(categories):
-            take = base + (1 if i < remainder else 0)
-            all_cases.extend(per_category[category][:take])
+        max_len = max((len(cases) for cases in per_category.values()), default=0)
+        for i in range(max_len):
+            for category in categories:
+                if i < len(per_category[category]):
+                    all_cases.append(per_category[category][i])
+                    if len(all_cases) >= max_cases:
+                        return all_cases
 
         return all_cases
 

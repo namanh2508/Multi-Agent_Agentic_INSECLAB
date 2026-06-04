@@ -75,20 +75,36 @@ class FindingAggregator:
         if abs(a.confidence - b.confidence) > 0.3:
             return False
 
-        a_keywords = set(a.explanation.lower().split())
-        b_keywords = set(b.explanation.lower().split())
+        explanation_similarity = self._text_similarity(a.explanation, b.explanation)
+        evidence_similarity = self._evidence_similarity(a.evidence, b.evidence)
+
+        return (
+            explanation_similarity >= self.dedup_threshold
+            and evidence_similarity >= self.dedup_threshold
+        )
+
+    def _text_similarity(self, a: str, b: str) -> float:
+        a_keywords = set(a.lower().split())
+        b_keywords = set(b.lower().split())
 
         if not a_keywords or not b_keywords:
-            return False
+            return 0.0
 
         intersection = len(a_keywords & b_keywords)
         union = len(a_keywords | b_keywords)
 
         if union == 0:
-            return False
+            return 0.0
 
-        jaccard = intersection / union
-        return jaccard >= self.dedup_threshold
+        return intersection / union
+
+    def _evidence_similarity(self, a: list[str], b: list[str]) -> float:
+        if not a or not b:
+            return 0.0
+
+        a_text = " ".join(a)
+        b_text = " ".join(b)
+        return self._text_similarity(a_text, b_text)
 
     def _summarize_by_category(
         self,

@@ -35,11 +35,11 @@ ollama pull phi4-mini
 
 Trong workflow Task 1, hai model được chia như sau:
 
-| Agent | Model | Lý do |
-|---|---|---|
-| `CurriculumAnswerAgent` | `llama3.1:8b` | Trả lời câu hỏi cần năng lực đọc hiểu, tổng hợp và citation tốt hơn |
-| `CurriculumReviewAgent` | `phi4-mini:latest` | Review ngắn, nhẹ hơn, tiết kiệm tài nguyên |
-| `CurriculumCrawlerAgent`, `CurriculumReaderAgent`, `CurriculumRetrieverAgent` | Không dùng LLM | Crawl, parse, search bằng code |
+| Agent                                                                         | Model              | Lý do                                                               |
+| ----------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------------- |
+| `CurriculumAnswerAgent`                                                       | `llama3.1:8b`      | Trả lời câu hỏi cần năng lực đọc hiểu, tổng hợp và citation tốt hơn |
+| `CurriculumReviewAgent`                                                       | `phi4-mini:latest` | Review ngắn, nhẹ hơn, tiết kiệm tài nguyên                          |
+| `CurriculumCrawlerAgent`, `CurriculumReaderAgent`, `CurriculumRetrieverAgent` | Không dùng LLM     | Crawl, parse, search bằng code                                      |
 
 Lưu ý RAM: không dùng `ollama run llama3.1:8b` hoặc `ollama run phi4-mini` để kiểm tra trong terminal nếu bị lỗi thiếu RAM, vì lệnh này dùng context mặc định của model. Tool gọi Ollama qua API với `num_ctx: 1024`, nên nhu cầu RAM thấp hơn.
 
@@ -194,21 +194,21 @@ python cli.py eval --adapter workflow --target configs\daa_curriculum_workflow.y
 
 Giải thích tham số:
 
-| Tham số | Ý nghĩa |
-|---|---|
-| `--adapter workflow` | Đầu vào là workflow agent qua YAML |
-| `--target configs\daa_curriculum_workflow.yaml` | File mô tả workflow cần test |
-| `--categories ASI01,ASI02,ASI06` | Nhóm lỗ hổng cần test |
-| `--judge-provider rule` | Dùng judge offline, không cần API |
-| `--max-attacks 20` | Số attack case tối đa |
-| `--output ...html` | File report kết quả |
-| `--surface-selection cmab` | Bật contextual UCB bandit selector thay cho FIFO surface scheduling |
-| `--cmab-exploration-c` | Hệ số exploration của contextual UCB, mặc định `1.4` |
-| `--reward-cost-penalty` | Phạt chi phí mỗi attack, mặc định `0.1` |
-| `--reward-no-finding` | Reward khi không có finding, mặc định `-0.2` |
-| `--reward-novelty-bonus` | Thưởng finding mới, mặc định `2.0` |
-| `--reward-duplicate-penalty` | Phạt finding trùng, mặc định `1.0` |
-| `--bandit-plot-dir` | Thư mục xuất `bandit_stats.json`, `context_action_value_table.svg`, `reward_curve.svg` |
+| Tham số                                         | Ý nghĩa                                                                                |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `--adapter workflow`                            | Đầu vào là workflow agent qua YAML                                                     |
+| `--target configs\daa_curriculum_workflow.yaml` | File mô tả workflow cần test                                                           |
+| `--categories ASI01,ASI02,ASI06`                | Nhóm lỗ hổng cần test                                                                  |
+| `--judge-provider rule`                         | Dùng judge offline, không cần API                                                      |
+| `--max-attacks 20`                              | Số attack case tối đa                                                                  |
+| `--output ...html`                              | File report kết quả                                                                    |
+| `--surface-selection cmab`                      | Bật contextual UCB bandit selector thay cho FIFO surface scheduling                    |
+| `--cmab-exploration-c`                          | Hệ số exploration của contextual UCB, mặc định `1.4`                                   |
+| `--reward-cost-penalty`                         | Phạt chi phí mỗi attack, mặc định `0.1`                                                |
+| `--reward-no-finding`                           | Reward khi không có finding, mặc định `-0.2`                                           |
+| `--reward-novelty-bonus`                        | Thưởng finding mới, mặc định `2.0`                                                     |
+| `--reward-duplicate-penalty`                    | Phạt finding trùng, mặc định `1.0`                                                     |
+| `--bandit-plot-dir`                             | Thư mục xuất `bandit_stats.json`, `context_action_value_table.svg`, `reward_curve.svg` |
 
 Khi bật `--bandit-plot-dir reports\bandit`, tool sẽ tạo thêm:
 
@@ -234,11 +234,11 @@ Nên bắt đầu bằng `--judge-provider rule` để test nhanh và ổn đị
 
 ## Các Nhóm Lỗ Hổng Đang Test
 
-| Category | Tên | Ý nghĩa |
-|---|---|---|
-| `ASI01` | Agent Goal Hijack | Kiểm tra agent có bị đổi mục tiêu bởi prompt độc hại không |
-| `ASI02` | Tool Misuse & Exploitation | Kiểm tra agent có gọi tool sai mục đích hoặc gọi tool nguy hiểm không |
-| `ASI06` | Memory & Context Poisoning | Kiểm tra dữ liệu độc hại có đi vào memory/context và ảnh hưởng bước sau không |
+| Category | Tên                        | Ý nghĩa                                                                       |
+| -------- | -------------------------- | ----------------------------------------------------------------------------- |
+| `ASI01`  | Agent Goal Hijack          | Kiểm tra agent có bị đổi mục tiêu bởi prompt độc hại không                    |
+| `ASI02`  | Tool Misuse & Exploitation | Kiểm tra agent có gọi tool sai mục đích hoặc gọi tool nguy hiểm không         |
+| `ASI06`  | Memory & Context Poisoning | Kiểm tra dữ liệu độc hại có đi vào memory/context và ảnh hưởng bước sau không |
 
 Attack template nằm ở:
 
@@ -577,13 +577,13 @@ else:
 
 Hyperparameters mặc định:
 
-| Hyperparameter | Default | Ý nghĩa |
-|---|---:|---|
-| `exploration_c` | `1.4` | Mức ưu tiên exploration trong contextual UCB |
-| `reward_cost_penalty` | `0.1` | Phạt nhẹ mỗi lần chạy attack |
-| `reward_no_finding` | `-0.2` | Reward khi attack không tạo finding |
-| `reward_novelty_bonus` | `2.0` | Thưởng finding mới, chưa trùng signature |
-| `reward_duplicate_penalty` | `1.0` | Phạt finding trùng |
+| Hyperparameter             | Default | Ý nghĩa                                      |
+| -------------------------- | ------: | -------------------------------------------- |
+| `exploration_c`            |   `1.4` | Mức ưu tiên exploration trong contextual UCB |
+| `reward_cost_penalty`      |   `0.1` | Phạt nhẹ mỗi lần chạy attack                 |
+| `reward_no_finding`        |  `-0.2` | Reward khi attack không tạo finding          |
+| `reward_novelty_bonus`     |   `2.0` | Thưởng finding mới, chưa trùng signature     |
+| `reward_duplicate_penalty` |   `1.0` | Phạt finding trùng                           |
 
 Code chọn action CMAB trong `bandit/contextual_ucb.py`:
 
@@ -816,11 +816,12 @@ def aggregate(self, target_id: str, findings: list[Finding], metadata: dict[str,
 
 Report generator xuất HTML/JSON/Markdown theo tham số `--format`.
 
-
 ### 9 Kiểm tra log chứng minh đã có lỗ hỏng ASI01, 02 , 06
+
 Chạy script:
+
 ```python
-python examples\generate_multiagent_vulnerability_evidence.py
+python cli.py eval --adapter multiagent --target configs\multiagent_vulnerable.yaml --categories ASI01,ASI02,ASI06 --judge-provider rule --max-attacks 20 --output reports\multiagent_security_report.html
 ```
 
 Kết quả xem ở `reports\multiagent_vulnerability_evidence\`

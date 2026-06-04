@@ -21,7 +21,7 @@ class AttackScheduler:
     Successful attacks increase priority for similar variants.
     """
 
-    def __init__(self, max_queue_size: int = 1000):
+    def __init__(self, max_queue_size: int | None = None):
         self._queue: deque[AttackCase] = deque(maxlen=max_queue_size)
         self._results: dict[str, AttackResult] = {}
         self._priority_boosts: dict[str, float] = {}

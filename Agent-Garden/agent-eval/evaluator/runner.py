@@ -75,7 +75,7 @@ class EvalRunner:
                 cases,
                 n_variants=self.config.n_variants,
             )
-            cases.extend(variants)
+            cases = self._interleave_mutation_variants(cases, variants)
         self.scheduler.enqueue(cases)
         surface_selector = self._build_surface_selector()
 
@@ -197,6 +197,31 @@ class EvalRunner:
         return ContextualUCBSurfaceSelector(CMABConfig(
             exploration_c=float(self.config.adapter_config.config.get("cmab_exploration_c", 1.4)),
         ))
+
+    def _interleave_mutation_variants(self, cases: list[Any], variants: list[Any]) -> list[Any]:
+        variants_by_parent: dict[str, list[Any]] = {}
+        for variant in variants:
+            parent_id = variant.metadata.get("variant_of")
+            if parent_id:
+                variants_by_parent.setdefault(parent_id, []).append(variant)
+
+        interleaved = []
+        for case in cases:
+            interleaved.append(case)
+            case_variants = variants_by_parent.get(case.id, [])
+            if case_variants:
+                interleaved.append(case_variants.pop(0))
+
+        remaining = True
+        while remaining:
+            remaining = False
+            for case in cases:
+                case_variants = variants_by_parent.get(case.id, [])
+                if case_variants:
+                    interleaved.append(case_variants.pop(0))
+                    remaining = True
+
+        return interleaved
 
     def _build_selection_context(self, last_outcome: str, finding_count: int) -> str:
         profile = self.config.adapter_config.config.get("profile", "unknown")

