@@ -816,6 +816,15 @@ def aggregate(self, target_id: str, findings: list[Finding], metadata: dict[str,
 
 Report generator xuất HTML/JSON/Markdown theo tham số `--format`.
 
+
+### 9 Kiểm tra log chứng minh đã có lỗ hỏng ASI01, 02 , 06
+Chạy script:
+```python
+python examples\generate_multiagent_vulnerability_evidence.py
+```
+
+Kết quả xem ở `reports\multiagent_vulnerability_evidence\`
+
 ## Đọc Kết Quả Đánh Giá
 
 Sau khi chạy CLI, bạn sẽ có:
